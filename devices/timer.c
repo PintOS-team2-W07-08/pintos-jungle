@@ -98,7 +98,6 @@ timer_sleep (int64_t ticks) {
 	ASSERT (intr_get_level () == INTR_ON);
 	if(timer_elapsed (start) < ticks)
 		thread_sleep(start+ticks);
-		//thread_yield ();
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -138,8 +137,9 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 		//글로벌 틱 체크
 		struct thread* thrdp = list_entry (elem, struct thread, elem);
 		if(thrdp->wakeup_tick <= ticks){
-			thread_print_stats();
-			printf("wakeup tick: %d \n", thrdp->wakeup_tick);
+			// thread_print_stats();
+			// timer_print_stats();
+			// printf("wakeup tick: %d \n", thrdp->wakeup_tick);
 			thread_wakeup(thrdp);
 		}
 		elem = elem->next;
