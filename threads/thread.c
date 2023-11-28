@@ -29,6 +29,8 @@
 static struct list ready_list;
 static struct list sleep_list;
 
+bool bigger_priority(const struct list_elem *, const struct list_elem *, void *);
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -146,7 +148,6 @@ void thread_sleep(int64_t ticks){
 	ASSERT (!intr_context ());
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		printf("wakeup tick 설정:%d \n",ticks);
 		curr->wakeup_tick = ticks;
 		list_push_back (&sleep_list, &curr->elem);
 	//global tick 업데이트 (thread_tick)
@@ -159,7 +160,7 @@ struct list_elem *getSleep_list(){
 }
 
 void thread_wakeup(struct thread* thrd){
-	printf("깨우려는 TID: %d\n",thrd->tid);
+
 	list_remove(&(thrd->elem));
 	thread_unblock(thrd);
 	// schedule();
@@ -238,6 +239,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+	thread_yield();
 
 	return tid;
 }
@@ -272,7 +274,8 @@ thread_unblock (struct thread *t) {
 
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
-	list_push_back (&ready_list, &t->elem);
+	list_insert_ordered(&ready_list, &t->elem, bigger_priority, NULL);
+	// list_push_back (&ready_list, &t->elem); ??
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -344,6 +347,7 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	thread_current ()->priority = new_priority;
+	thread_yield();
 }
 
 /* Returns the current thread's priority. */
@@ -453,7 +457,19 @@ next_thread_to_run (void) {
 	if (list_empty (&ready_list))
 		return idle_thread;
 	else
+		list_sort(&ready_list, bigger_priority, &ready_list);
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
+}
+bool bigger_priority(const struct list_elem *a, 
+				   const struct list_elem *b, 
+				   void *aux UNUSED){
+	struct thread *threadA = list_entry(a, struct thread, elem);
+	struct thread *threadB = list_entry(b, struct thread, elem);
+	if(threadA->priority > threadB->priority){
+		return true;
+	}else{
+		return false;
+	}
 }
 
 /* Use iretq to launch the thread */
