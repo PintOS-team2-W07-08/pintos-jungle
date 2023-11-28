@@ -137,9 +137,7 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 		//글로벌 틱 체크
 		struct thread* thrdp = list_entry (elem, struct thread, elem);
 		if(thrdp->wakeup_tick <= ticks){
-			// thread_print_stats();
-			// timer_print_stats();
-			// printf("wakeup tick: %d \n", thrdp->wakeup_tick);
+
 			thread_wakeup(thrdp);
 		}
 		elem = elem->next;

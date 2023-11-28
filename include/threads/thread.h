@@ -117,9 +117,11 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
+
 struct list_elem * getSleep_list(void); //
 void thread_sleep(int64_t); //
 void thread_wakeup(struct thread*);//
+
 void thread_tick (void);
 void thread_print_stats (void);
 

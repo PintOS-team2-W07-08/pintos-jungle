@@ -148,7 +148,6 @@ void thread_sleep(int64_t ticks){
 	ASSERT (!intr_context ());
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		// printf("wakeup tick 설정:%d \n",ticks);
 		curr->wakeup_tick = ticks;
 		list_push_back (&sleep_list, &curr->elem);
 	//global tick 업데이트 (thread_tick)
@@ -161,7 +160,7 @@ struct list_elem *getSleep_list(){
 }
 
 void thread_wakeup(struct thread* thrd){
-	// printf("깨우려는 TID: %d\n",thrd->tid);
+
 	list_remove(&(thrd->elem));
 	thread_unblock(thrd);
 	// schedule();
