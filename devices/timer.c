@@ -3,6 +3,9 @@
 #include <inttypes.h>
 #include <round.h>
 #include <stdio.h>
+
+#include <list.h>
+
 #include "threads/interrupt.h"
 #include "threads/io.h"
 #include "threads/synch.h"
@@ -121,17 +124,26 @@ void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
 	//최소틱
-	//for문
-		//슬립리스트 wakeup tick < ticks
-		//wakeup
-
+	struct list_elem* elem = getSleep_list();
+	// printf("wakeup tick: %d global tick: %d\n", thrdp->wakeup_tick, timer_ticks());
+	while (!(elem != NULL && elem->prev != NULL && elem->next == NULL)) {
+		// 
+		//글로벌 틱 체크
+		struct thread* thrdp = list_entry (elem, struct thread, elem);
+		if(thrdp->wakeup_tick <= ticks){
+			thread_print_stats();
+			printf("wakeup tick: %d \n", thrdp->wakeup_tick);
+			thread_wakeup(thrdp);
+		}
+		elem = elem->next;
+	}
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
