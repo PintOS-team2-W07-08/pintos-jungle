@@ -27,6 +27,7 @@
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
+static struct list sleep_list;
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -109,12 +110,14 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	list_init (&ready_list);
 	list_init (&destruction_req);
+	list_init (&sleep_list);
 
 	/* Set up a thread structure for the running thread. */
 	initial_thread = running_thread ();
 	init_thread (initial_thread, "main", PRI_DEFAULT);
 	initial_thread->status = THREAD_RUNNING;
 	initial_thread->tid = allocate_tid ();
+	initial_thread->wakeup_tick = -1;
 }
 
 /* Starts preemptive thread scheduling by enabling interrupts.
@@ -132,6 +135,24 @@ thread_start (void) {
 	/* Wait for the idle thread to initialize idle_thread. */
 	sema_down (&idle_started);
 }
+
+/*
+	내가 만든 함수
+*/
+void thread_sleep(int64_t ticks){
+	struct thread *curr = thread_current ();
+	enum intr_level old_level;
+
+	ASSERT (!intr_context ());
+	old_level = intr_disable ();
+	if (curr != idle_thread)
+		//thread의 wakeup tick 설정
+		list_push_back (&sleep_list, &curr->elem);
+	//global tick 업데이트 (thread_tick)
+	do_schedule (THREAD_BLOCKED);
+	intr_set_level (old_level);
+};
+
 
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
