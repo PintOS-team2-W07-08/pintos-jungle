@@ -382,10 +382,16 @@ void
 thread_donate_priority(struct thread* toThread, struct thread* donor){
 	// printf("우선권 기부하기 -> %d\n", prioirty);
 	ASSERT(&(toThread->donor_list)!=NULL);
+	struct thread* nowThrd = toThread;
 	
-	list_push_back(&(toThread->donor_list), &donor->donor_elem);
+	list_push_back(&(nowThrd->donor_list), &donor->donor_elem);
+	while(nowThrd->waitonlock){
+		struct lock *lock = nowThrd->waitonlock;
+		struct thread *holder = lock->holder;
+		nowThrd = holder;
+	}
+	
 	thread_yield();
-
 }
 
 void 
