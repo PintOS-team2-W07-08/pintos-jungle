@@ -29,7 +29,6 @@
 static struct list ready_list;
 static struct list sleep_list;
 
-bool bigger_priority(const struct list_elem *, const struct list_elem *, void *);
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -457,7 +456,7 @@ next_thread_to_run (void) {
 	if (list_empty (&ready_list))
 		return idle_thread;
 	else
-		list_sort(&ready_list, bigger_priority, &ready_list);
+		list_sort(&ready_list, bigger_priority, NULL);
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 bool bigger_priority(const struct list_elem *a, 
