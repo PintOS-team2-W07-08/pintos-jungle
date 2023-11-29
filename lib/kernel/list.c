@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "list.h"
 #include "../debug.h"
 
@@ -487,3 +488,4 @@ list_min (struct list *list, list_less_func *less, void *aux) {
 	}
 	return min;
 }
+
