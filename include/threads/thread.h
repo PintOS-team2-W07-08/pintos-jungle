@@ -90,6 +90,7 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int base_priority;					/* Base priority for recall */
+	int priority;
 	int64_t wakeup_tick;
 	struct list donor_list;
 	struct list_elem donor_elem;
@@ -144,6 +145,7 @@ bool bigger_priority(const struct list_elem *, const struct list_elem *, void *)
 bool bigger_priority_donor(const struct list_elem *, const struct list_elem *, void *);
 
 int thread_get_priority (void);
+int thread_get_priority2(struct thread*);
 void thread_set_priority (int);
 
 int thread_get_base_priority(struct thread *);
