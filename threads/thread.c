@@ -4,6 +4,9 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "threads/malloc.h"
+
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -223,6 +226,7 @@ thread_create (const char *name, int priority,
 
 	/* Initialize thread. */
 	init_thread (t, name, priority);
+
 	tid = t->tid = allocate_tid ();
 
 	/* Call the kernel_thread if it scheduled.
@@ -345,14 +349,59 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	// printf("우선권 설정\n");
+	thread_current ()->base_priority = new_priority;
 	thread_yield();
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) {
-	return thread_current ()->priority;
+	// printf("우선권 가져오기\n");
+	struct thread* thisThrd = thread_current();
+	ASSERT(&(thisThrd->donor_list)!=NULL);
+	
+	int maxPriority = thisThrd->base_priority;
+	if(!list_empty(&(thisThrd->donor_list))){
+		
+		struct thread* maxDonor = list_entry(
+			list_min(&(thisThrd->donor_list),bigger_priority_donor,NULL), 
+			struct thread, donor_elem);
+		maxPriority = maxDonor->base_priority;
+	}
+	return maxPriority;
+}
+
+int 
+thread_get_base_priority(struct thread* Thread){
+	// printf("기본 우선권 가져오기\n");
+	return Thread->base_priority;
+}
+
+void 
+thread_donate_priority(struct thread* toThread, struct thread* donor){
+	// printf("우선권 기부하기 -> %d\n", prioirty);
+	ASSERT(&(toThread->donor_list)!=NULL);
+	
+	list_push_back(&(toThread->donor_list), &donor->donor_elem);
+	thread_yield();
+
+}
+
+void 
+thread_recall_priority(struct lock *lock){
+	struct thread* thrd = thread_current();
+	// printf("우선권 반납준비\n");
+	ASSERT(&(thrd->donor_list)!=NULL);
+	struct list *list= &(thrd->donor_list);
+	struct thread *threadA;
+	struct list_elem *e;
+	for (e = list_begin (list); e != list_end (list); e = list_next (e)){
+		threadA = list_entry(e, struct thread, donor_elem);
+		if(threadA->waitonlock == lock){
+			list_remove(e);
+		}
+	}
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -442,8 +491,10 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
-	t->priority = priority;
+	t->base_priority = priority;
 	t->magic = THREAD_MAGIC;
+	list_init(&(t->donor_list));
+	return;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -459,12 +510,25 @@ next_thread_to_run (void) {
 		list_sort(&ready_list, bigger_priority, NULL);
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
+
 bool bigger_priority(const struct list_elem *a, 
 				   const struct list_elem *b, 
 				   void *aux UNUSED){
 	struct thread *threadA = list_entry(a, struct thread, elem);
 	struct thread *threadB = list_entry(b, struct thread, elem);
-	if(threadA->priority > threadB->priority){
+	if(threadA->base_priority > threadB->base_priority){
+		return true;
+	}else{
+		return false;
+	}
+}
+
+bool bigger_priority_donor(const struct list_elem *a, 
+				   const struct list_elem *b, 
+				   void *aux UNUSED){
+	struct thread *threadA = list_entry(a, struct thread, donor_elem);
+	struct thread *threadB = list_entry(b, struct thread, donor_elem);
+	if(threadA->base_priority > threadB->base_priority){
 		return true;
 	}else{
 		return false;
@@ -579,6 +643,7 @@ do_schedule(int status) {
 	while (!list_empty (&destruction_req)) {
 		struct thread *victim =
 			list_entry (list_pop_front (&destruction_req), struct thread, elem);
+		// free(victim->donor_list);
 		palloc_free_page(victim);
 	}
 	thread_current ()->status = status;
@@ -645,7 +710,7 @@ void list_thread_dump(struct list *list){
 	printf("------list dump------\n");
 	for (e = list_begin (list); e != list_end (list); e = list_next (e)){
 		threadA = list_entry(e, struct thread, elem);
-		printf("priority: %d, tid: %d\n",threadA->priority,threadA->tid);
+		printf("priority: %d, tid: %d\n",threadA->base_priority,threadA->tid);
 	}
 	printf("-----------------------\n");
 	intr_set_level (old_level);
