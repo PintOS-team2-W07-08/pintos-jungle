@@ -138,6 +138,7 @@ const char *thread_name (void);
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
+bool bigger_priority(const struct list_elem *, const struct list_elem *, void *);
 int thread_get_priority (void);
 void thread_set_priority (int);
 
@@ -147,5 +148,7 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+void list_thread_dump(struct list *);
 
 #endif /* threads/thread.h */

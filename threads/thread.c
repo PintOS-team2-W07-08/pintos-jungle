@@ -29,7 +29,6 @@
 static struct list ready_list;
 static struct list sleep_list;
 
-bool bigger_priority(const struct list_elem *, const struct list_elem *, void *);
 
 /* Idle thread. */
 static struct thread *idle_thread;
@@ -457,7 +456,7 @@ next_thread_to_run (void) {
 	if (list_empty (&ready_list))
 		return idle_thread;
 	else
-		list_sort(&ready_list, bigger_priority, &ready_list);
+		list_sort(&ready_list, bigger_priority, NULL);
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
 bool bigger_priority(const struct list_elem *a, 
@@ -635,4 +634,20 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+void list_thread_dump(struct list *list){
+	enum intr_level old_level;
+	old_level = intr_disable ();
+	struct list_elem *e;
+	ASSERT (list != NULL);
+	struct thread *threadA;
+	printf("------list dump------\n");
+	for (e = list_begin (list); e != list_end (list); e = list_next (e)){
+		threadA = list_entry(e, struct thread, elem);
+		printf("priority: %d, tid: %d\n",threadA->priority,threadA->tid);
+	}
+	printf("-----------------------\n");
+	intr_set_level (old_level);
+	return;
 }
