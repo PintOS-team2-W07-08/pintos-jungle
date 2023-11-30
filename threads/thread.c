@@ -149,9 +149,10 @@ void thread_sleep(int64_t ticks){
 
 	ASSERT (!intr_context ());
 	old_level = intr_disable ();
-	if (curr != idle_thread)
+	if (curr != idle_thread){
 		curr->wakeup_tick = ticks;
 		list_push_back (&sleep_list, &curr->elem);
+	}
 	//global tick 업데이트 (thread_tick)
 	thread_block();
 	intr_set_level (old_level);
@@ -161,10 +162,13 @@ struct list_elem *getSleep_list(){
 	return list_begin (&sleep_list);
 }
 
+struct list_elem *getTail(void){
+	return list_tail(&sleep_list);
+}
+
 void thread_wakeup(struct thread* thrd){
 
-	list_remove(&(thrd->elem));
-	thread_unblock(thrd);
+
 	// schedule();
 }
 
@@ -278,7 +282,7 @@ thread_unblock (struct thread *t) {
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	list_insert_ordered(&ready_list, &t->elem, bigger_priority, NULL);
-	// list_push_back (&ready_list, &t->elem); ??
+	// list_push_back (&ready_list, &t->elem);//?
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -342,6 +346,7 @@ thread_yield (void) {
 	old_level = intr_disable ();
 	if (curr != idle_thread)
 		list_push_back (&ready_list, &curr->elem);
+
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -350,7 +355,15 @@ thread_yield (void) {
 void
 thread_set_priority (int new_priority) {
 	// printf("우선권 설정\n");
-	thread_current ()->base_priority = new_priority;
+	struct thread *thrd = thread_current();
+	thrd->base_priority = new_priority;
+	thrd->priority = new_priority;
+	
+	if(!list_empty(&(thrd->donor_list))){
+		list_sort(&(thrd->donor_list),bigger_priority_donor,NULL);
+		thrd->priority = list_entry(list_front(&(thrd->donor_list)), struct thread, donor_elem) -> priority;
+		// thrd->priority = list_min(&(thrd->donor_list), bigger_priority_donor, NULL);
+	}
 	thread_yield();
 }
 
@@ -364,22 +377,7 @@ thread_get_priority (void) {
 
 int
 thread_get_priority2(struct thread* Thread){
-	ASSERT(&(Thread->donor_list)!=NULL);
-	
-	int basePriority = Thread->base_priority;
-	int maxPriority = 0;
-
-	if(!list_empty(&(Thread->donor_list))){
-		
-		struct thread* maxDonor = list_entry(
-			list_min(&(Thread->donor_list),bigger_priority_donor,NULL), 
-			struct thread, donor_elem);
-		maxPriority = maxDonor->base_priority;
-	}else{
-		maxPriority=basePriority;
-	}
-	// if(basePriority > maxPriority) maxPriority = basePriority;
-	return maxPriority;
+	return Thread->priority;
 }
 
 int 
@@ -393,12 +391,14 @@ thread_donate_priority(struct thread* toThread, struct thread* donor){
 	// printf("우선권 기부하기 -> %d\n", prioirty);
 	ASSERT(&(toThread->donor_list)!=NULL);
 	struct thread* nowThrd = toThread;
+	toThread->priority = donor->priority;	
+	list_push_back(&(toThread->donor_list), &donor->donor_elem);
 	
-	list_push_back(&(nowThrd->donor_list), &donor->donor_elem);
 	while(nowThrd->waitonlock){
 		struct lock *lock = nowThrd->waitonlock;
 		struct thread *holder = lock->holder;
-		list_push_back(&(holder->donor_list), &nowThrd->donor_elem);
+		// list_push_back(&(holder->donor_list), &nowThrd->donor_elem);
+		holder->priority = nowThrd->priority; //무조건 높은애만 들어옴
 		nowThrd = holder;
 	}
 	
@@ -418,6 +418,12 @@ thread_recall_priority(struct lock *lock){
 		if(threadA->waitonlock == lock){
 			list_remove(e);
 		}
+	}
+	if(!list_empty(list)){
+		list_sort(list, bigger_priority_donor, NULL);
+		thrd->priority=list_entry(list_front(list),struct thread, donor_elem)->priority;
+	}else{
+		thrd->priority = thrd->base_priority;
 	}
 }
 
@@ -509,6 +515,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 	t->base_priority = priority;
+	t->priority = priority;
 	t->magic = THREAD_MAGIC;
 	list_init(&(t->donor_list));
 	return;
@@ -533,7 +540,7 @@ bool bigger_priority(const struct list_elem *a,
 				   void *aux UNUSED){
 	struct thread *threadA = list_entry(a, struct thread, elem);
 	struct thread *threadB = list_entry(b, struct thread, elem);
-	if(threadA->base_priority > threadB->base_priority){
+	if(threadA->priority > threadB->priority){
 		return true;
 	}else{
 		return false;
@@ -545,9 +552,7 @@ bool bigger_priority_donor(const struct list_elem *a,
 				   void *aux UNUSED){
 	struct thread *threadA = list_entry(a, struct thread, donor_elem);
 	struct thread *threadB = list_entry(b, struct thread, donor_elem);
-	int threadAp = thread_get_priority2(threadA);
-	int threadBp = thread_get_priority2(threadB);
-	if(threadAp > threadBp){
+	if(threadA->priority > threadB->priority){
 		return true;
 	}else{
 		return false;
