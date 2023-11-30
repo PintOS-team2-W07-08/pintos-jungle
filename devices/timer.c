@@ -132,15 +132,16 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	//최소틱
 	struct list_elem* elem = getSleep_list();
 	// printf("wakeup tick: %d global tick: %d\n", thrdp->wakeup_tick, timer_ticks());
-	while (!(elem != NULL && elem->prev != NULL && elem->next == NULL)) {
+	while (elem != getTail()) {
 		// 
 		//글로벌 틱 체크
 		struct thread* thrdp = list_entry (elem, struct thread, elem);
 		if(thrdp->wakeup_tick <= ticks){
-
-			thread_wakeup(thrdp);
+			elem = list_remove(elem);
+			thread_unblock(thrdp);
+		}else {
+			elem = list_next(elem);//TODO: TIL
 		}
-		elem = elem->next;
 	}
 }
 

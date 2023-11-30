@@ -4,6 +4,9 @@
 #include <random.h>
 #include <stdio.h>
 #include <string.h>
+
+#include "threads/malloc.h"
+
 #include "threads/flags.h"
 #include "threads/interrupt.h"
 #include "threads/intr-stubs.h"
@@ -146,9 +149,10 @@ void thread_sleep(int64_t ticks){
 
 	ASSERT (!intr_context ());
 	old_level = intr_disable ();
-	if (curr != idle_thread)
+	if (curr != idle_thread){
 		curr->wakeup_tick = ticks;
 		list_push_back (&sleep_list, &curr->elem);
+	}
 	//global tick 업데이트 (thread_tick)
 	thread_block();
 	intr_set_level (old_level);
@@ -158,10 +162,13 @@ struct list_elem *getSleep_list(){
 	return list_begin (&sleep_list);
 }
 
+struct list_elem *getTail(void){
+	return list_tail(&sleep_list);
+}
+
 void thread_wakeup(struct thread* thrd){
 
-	list_remove(&(thrd->elem));
-	thread_unblock(thrd);
+
 	// schedule();
 }
 
@@ -223,6 +230,7 @@ thread_create (const char *name, int priority,
 
 	/* Initialize thread. */
 	init_thread (t, name, priority);
+
 	tid = t->tid = allocate_tid ();
 
 	/* Call the kernel_thread if it scheduled.
@@ -274,7 +282,7 @@ thread_unblock (struct thread *t) {
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	list_insert_ordered(&ready_list, &t->elem, bigger_priority, NULL);
-	// list_push_back (&ready_list, &t->elem); ??
+	// list_push_back (&ready_list, &t->elem);//?
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
 }
@@ -338,6 +346,7 @@ thread_yield (void) {
 	old_level = intr_disable ();
 	if (curr != idle_thread)
 		list_push_back (&ready_list, &curr->elem);
+
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -345,14 +354,77 @@ thread_yield (void) {
 /* Sets the current thread's priority to NEW_PRIORITY. */
 void
 thread_set_priority (int new_priority) {
-	thread_current ()->priority = new_priority;
+	// printf("우선권 설정\n");
+	struct thread *thrd = thread_current();
+	thrd->base_priority = new_priority;
+	thrd->priority = new_priority;
+	
+	if(!list_empty(&(thrd->donor_list))){
+		list_sort(&(thrd->donor_list),bigger_priority_donor,NULL);
+		thrd->priority = list_entry(list_front(&(thrd->donor_list)), struct thread, donor_elem) -> priority;
+		// thrd->priority = list_min(&(thrd->donor_list), bigger_priority_donor, NULL);
+	}
 	thread_yield();
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) {
-	return thread_current ()->priority;
+	// printf("우선권 가져오기\n");
+	struct thread* thisThrd = thread_current();
+	return thread_get_priority2(thisThrd);
+}
+
+int
+thread_get_priority2(struct thread* Thread){
+	return Thread->priority;
+}
+
+int 
+thread_get_base_priority(struct thread* Thread){
+	// printf("기본 우선권 가져오기\n");
+	return Thread->base_priority;
+}
+
+void 
+thread_donate_priority(struct thread* toThread, struct thread* donor){
+	// printf("우선권 기부하기 -> %d\n", prioirty);
+	ASSERT(&(toThread->donor_list)!=NULL);
+	struct thread* nowThrd = toThread;
+	toThread->priority = donor->priority;	
+	list_push_back(&(toThread->donor_list), &donor->donor_elem);
+	
+	while(nowThrd->waitonlock){
+		struct lock *lock = nowThrd->waitonlock;
+		struct thread *holder = lock->holder;
+		// list_push_back(&(holder->donor_list), &nowThrd->donor_elem);
+		holder->priority = nowThrd->priority; //무조건 높은애만 들어옴
+		nowThrd = holder;
+	}
+	
+	thread_yield();
+}
+
+void 
+thread_recall_priority(struct lock *lock){
+	struct thread* thrd = thread_current();
+	// printf("우선권 반납준비\n");
+	ASSERT(&(thrd->donor_list)!=NULL);
+	struct list *list= &(thrd->donor_list);
+	struct thread *threadA;
+	struct list_elem *e;
+	for (e = list_begin (list); e != list_end (list); e = list_next (e)){
+		threadA = list_entry(e, struct thread, donor_elem);
+		if(threadA->waitonlock == lock){
+			list_remove(e);
+		}
+	}
+	if(!list_empty(list)){
+		list_sort(list, bigger_priority_donor, NULL);
+		thrd->priority=list_entry(list_front(list),struct thread, donor_elem)->priority;
+	}else{
+		thrd->priority = thrd->base_priority;
+	}
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -442,8 +514,11 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
+	t->base_priority = priority;
 	t->priority = priority;
 	t->magic = THREAD_MAGIC;
+	list_init(&(t->donor_list));
+	return;
 }
 
 /* Chooses and returns the next thread to be scheduled.  Should
@@ -459,11 +534,24 @@ next_thread_to_run (void) {
 		list_sort(&ready_list, bigger_priority, NULL);
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
 }
+
 bool bigger_priority(const struct list_elem *a, 
 				   const struct list_elem *b, 
 				   void *aux UNUSED){
 	struct thread *threadA = list_entry(a, struct thread, elem);
 	struct thread *threadB = list_entry(b, struct thread, elem);
+	if(threadA->priority > threadB->priority){
+		return true;
+	}else{
+		return false;
+	}
+}
+
+bool bigger_priority_donor(const struct list_elem *a, 
+				   const struct list_elem *b, 
+				   void *aux UNUSED){
+	struct thread *threadA = list_entry(a, struct thread, donor_elem);
+	struct thread *threadB = list_entry(b, struct thread, donor_elem);
 	if(threadA->priority > threadB->priority){
 		return true;
 	}else{
@@ -579,6 +667,7 @@ do_schedule(int status) {
 	while (!list_empty (&destruction_req)) {
 		struct thread *victim =
 			list_entry (list_pop_front (&destruction_req), struct thread, elem);
+		// free(victim->donor_list);
 		palloc_free_page(victim);
 	}
 	thread_current ()->status = status;
@@ -645,7 +734,7 @@ void list_thread_dump(struct list *list){
 	printf("------list dump------\n");
 	for (e = list_begin (list); e != list_end (list); e = list_next (e)){
 		threadA = list_entry(e, struct thread, elem);
-		printf("priority: %d, tid: %d\n",threadA->priority,threadA->tid);
+		printf("priority: %d, tid: %d\n",threadA->base_priority,threadA->tid);
 	}
 	printf("-----------------------\n");
 	intr_set_level (old_level);

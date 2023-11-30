@@ -65,6 +65,7 @@ sema_down (struct semaphore *sema) {
 	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
+	
 	while (sema->value == 0) {
 		list_insert_ordered(&sema->waiters, &thread_current ()->elem, bigger_priority, NULL);
 		thread_block ();
@@ -192,6 +193,12 @@ lock_acquire (struct lock *lock) {
 	ASSERT (!intr_context ());
 	ASSERT (!lock_held_by_current_thread (lock));
 
+	struct thread *holder =  lock->holder;
+	if(holder!=NULL){
+		thread_current()->waitonlock = lock;
+		thread_donate_priority(holder, thread_current());
+	}
+	
 	sema_down (&lock->semaphore);
 	lock->holder = thread_current ();
 }
@@ -226,6 +233,7 @@ lock_release (struct lock *lock) {
 	ASSERT (lock != NULL);
 	ASSERT (lock_held_by_current_thread (lock));
 
+	thread_recall_priority(lock);
 	lock->holder = NULL;
 	sema_up (&lock->semaphore);
 }
@@ -341,7 +349,7 @@ bool bigger_priority_cond(const struct list_elem *a,
 	struct list_elem *elemB = list_front(&semaB->waiters);
 	struct thread *threadA = list_entry(elemA, struct thread, elem);
 	struct thread *threadB = list_entry(elemB, struct thread, elem);
-	if(threadA->priority > threadB->priority){
+	if(threadA->base_priority > threadB->base_priority){
 		return true;
 	}else{
 		return false;

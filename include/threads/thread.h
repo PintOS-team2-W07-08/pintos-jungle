@@ -89,9 +89,12 @@ struct thread {
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
-	int priority;                       /* Priority. */
+	int base_priority;					/* Base priority for recall */
+	int priority;
 	int64_t wakeup_tick;
-
+	struct list donor_list;
+	struct list_elem donor_elem;
+	struct lock *waitonlock;
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
@@ -117,7 +120,7 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
-
+struct list_elem *getTail(void);
 struct list_elem * getSleep_list(void); //
 void thread_sleep(int64_t); //
 void thread_wakeup(struct thread*);//
@@ -139,8 +142,15 @@ void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 
 bool bigger_priority(const struct list_elem *, const struct list_elem *, void *);
+bool bigger_priority_donor(const struct list_elem *, const struct list_elem *, void *);
+
 int thread_get_priority (void);
+int thread_get_priority2(struct thread*);
 void thread_set_priority (int);
+
+int thread_get_base_priority(struct thread *);
+void thread_donate_priority(struct thread *, struct thread *);
+void thread_recall_priority(struct lock *lock);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
