@@ -5,6 +5,7 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/fixed_point.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -91,6 +92,8 @@ struct thread {
 	char name[16];                      /* Name (for debugging purposes). */
 	int base_priority;					/* Base priority for recall */
 	int priority;
+	int niceness;
+	fixed_point recent_cpu;
 	int64_t wakeup_tick;
 	struct list donor_list;
 	struct list_elem donor_elem;
@@ -151,6 +154,7 @@ void thread_set_priority (int);
 int thread_get_base_priority(struct thread *);
 void thread_donate_priority(struct thread *, struct thread *);
 void thread_recall_priority(struct lock *lock);
+int thread_calculate_priority(fixed_point, int)
 
 int thread_get_nice (void);
 void thread_set_nice (int);
