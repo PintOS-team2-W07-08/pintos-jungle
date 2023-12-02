@@ -143,6 +143,9 @@ const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+void thread_preemtion(void);
+
+struct thread* mlfq_begin(void);
 
 bool bigger_priority(const struct list_elem *, const struct list_elem *, void *);
 bool bigger_priority_donor(const struct list_elem *, const struct list_elem *, void *);
@@ -156,8 +159,9 @@ int thread_get_base_priority(struct thread *);
 void thread_donate_priority(struct thread *, struct thread *);
 void thread_recall_priority(struct lock *lock);
 
-void thread_calculate_priority(struct thread *thrd);
-void thread_calculate_recent_cpu(struct thread *thrd);
+void thread_calculate_priority(struct thread *thrd, void *aux);
+void thread_calculate_recent_cpu(struct thread *thrd, void *aux);
+
 void thread_calculate_priority_all (void);
 void thread_calculate_recent_cpu_all(void);
 

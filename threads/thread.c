@@ -61,7 +61,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 bool thread_mlfqs;
 static struct list multiple_ready_list[PRI_MAX - PRI_MIN + 1];
 static fixed_point load_avg;
-static int ready_threads = 1;
+static int ready_threads = 0;
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -182,9 +182,7 @@ struct list_elem *getTail(void){
 }
 
 void thread_wakeup(struct thread* thrd){
-
-
-	// schedule();
+	schedule();
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -261,7 +259,7 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-	thread_yield();
+	thread_preemtion();
 
 	return tid;
 }
@@ -301,8 +299,8 @@ thread_unblock (struct thread *t) {
 	}
 	else {
 		// TIL: idle은 if(ready_list=empty) 일때 실행되기 때문에 count 안해도됌
+		list_push_back(&multiple_ready_list[t->base_priority], &t->elem);
 		ready_threads += 1;
-		list_insert_ordered(&multiple_ready_list[t->base_priority], &t->elem, bigger_base_priority, NULL);
 	}
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
@@ -365,16 +363,57 @@ thread_yield (void) {
 	ASSERT (!intr_context ());
 
 	old_level = intr_disable ();
-	if (curr != idle_thread)
+	if (curr != idle_thread){
 		if(!thread_mlfqs){
 			list_push_back (&ready_list, &curr->elem);
 		}else{
 			// printf("multiple[%d]에 push\n",curr->base_priority);
 			list_push_back(&multiple_ready_list[curr->base_priority], &curr->elem);
+			ready_threads += 1;
 		}
-
+	}
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
+}
+
+void
+thread_preemtion(void){
+	if(!thread_mlfqs){
+		if(!list_empty(&ready_list)){
+			struct thread *curr = thread_current();
+			struct list_elem *e = list_begin(&ready_list);
+			struct thread *first_thread = list_entry(e, struct thread, elem);
+
+			if(first_thread->priority > curr->priority){
+				thread_yield();
+			}
+		}
+	}else{
+		if(ready_threads!=0){
+			struct thread *curr = thread_current();
+			struct list_elem *e = mlfq_begin();
+			struct thread *first_thread = list_entry(e, struct thread, elem);
+			if(first_thread->priority > curr->priority){
+				thread_yield();
+			}
+		}
+	}
+}
+
+struct thread* mlfq_begin(void){
+	struct list *mlfq;
+	struct thread* thrd;
+	for(int i = PRI_MAX; i >= PRI_MIN; i--) {
+		mlfq = &multiple_ready_list[i];
+		// list_thread_dump(mlfq);
+		if(list_empty(mlfq)) continue;
+		// printf("list안의 갯수 %d", list_size(mlfq));
+		// list_sort(mlfq, bigger_base_priority, NULL);
+		thrd = list_entry (list_front (mlfq), struct thread, elem);
+		ASSERT(is_thread(thrd));
+		// printf("쓰레드 명: %s\n",thrd->name);
+		return thrd;
+	}
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -392,7 +431,7 @@ thread_set_priority (int new_priority) {
 		thrd->priority = list_entry(list_front(&(thrd->donor_list)), struct thread, donor_elem) -> priority;
 		// thrd->priority = list_min(&(thrd->donor_list), bigger_priority_donor, NULL);
 	}
-	thread_yield();
+	thread_preemtion();
 }
 
 /* Returns the current thread's priority. */
@@ -469,7 +508,9 @@ void
 thread_set_nice (int nice) {
 	struct thread* thrd = thread_current();
 	thrd -> niceness = nice;
-	thread_calculate_priority(thrd);
+	bool flag = thrd->status == THREAD_READY;
+	thread_calculate_priority(thrd, (bool *)flag);
+	thread_preemtion();
 }
 
 /* Returns the current thread's nice value. */
@@ -502,7 +543,7 @@ thread_get_recent_cpu (void) {
 }
 
 void
-thread_calculate_recent_cpu (struct thread* thrd){
+thread_calculate_recent_cpu (struct thread* thrd, void *aux){
 	int nice = thrd->niceness;
 	int recent_cpu = thrd->recent_cpu;
 	recent_cpu = (2 * load_avg)/(2 * load_avg + 1) * recent_cpu + nice;
@@ -510,40 +551,48 @@ thread_calculate_recent_cpu (struct thread* thrd){
 	return;
 } 
 
-void thread_calculate_priority(struct thread* thrd) {
+void thread_calculate_priority(struct thread *thrd, void *aux) {
 	int recent_cpu = thrd->recent_cpu;
 	int nice = thrd->niceness;
 	int base_priority = PRI_MAX - (recent_cpu / 4) - (nice * 2);
 	thrd -> base_priority = base_priority;
+	
+	struct elem *e = &thrd->elem;
+
+	if(aux){ //ready 여부
+		list_remove(e);
+		list_push_back(&multiple_ready_list[base_priority], e);
+	}
 	return;
 }
 
-void thread_calculate_priority_all (void){
+void thread_calculate_priority_all(void){
 	//current_thread
-	thread_calculate_priority(thread_current());
+	thread_calculate_priority(thread_current(),(bool *)false);
 	//multiple_ready_list
 	struct list *list;
 	for (int i = PRI_MAX; i >= PRI_MIN; i--){
 		list = &multiple_ready_list[i];
-		execute_func_in_list(list, thread_calculate_priority, NULL);
+		execute_func_in_list(list, thread_calculate_priority, (bool *)true);
 	}
 	//sleep list
-	execute_func_in_list(&sleep_list, thread_calculate_priority, NULL);
+	execute_func_in_list(&sleep_list, thread_calculate_priority, (bool *)false);
+	thread_preemtion();
 }
 
 //TIL
-void execute_func_in_list(struct list* list, list_exec_func func, void *aux){
+void execute_func_in_list(struct list *list, list_exec_func func, void *aux){
 	if(list_empty(list)) return;
 	struct list_elem * e;
 	struct thread* thrd;
 	for (e = list_begin (list); e != list_end (list); e = list_next (e)){
 		thrd = list_entry(e, struct thread, elem);
-		list_exec_func(thrd);
+		func(thrd, aux);
 	}
 }
 
 void thread_calculate_recent_cpu_all(void){
-	thread_calculate_recent_cpu(thread_current());
+	thread_calculate_recent_cpu(thread_current(), NULL);
 	//multiple_ready_list
 	struct list *list;
 	for (int i = PRI_MAX; i >= PRI_MIN; i--){
@@ -630,7 +679,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 			t->niceness = 0;
 			t->recent_cpu = 0;
 		}
-		thread_calculate_priority(t);
+		thread_calculate_priority(t, false);
 		t->priority = PRI_MAX + 1;
 	} 
 
@@ -645,7 +694,7 @@ init_thread (struct thread *t, const char *name, int priority) {
    idle_thread. */
 static struct thread *
 next_thread_to_run (void) {
-	if (list_empty (&ready_list)) return idle_thread;
+	if (list_empty (&ready_list)) return idle_thread; //thread_current();
 	else {
 		list_sort(&ready_list, bigger_priority, NULL);
 		return list_entry (list_pop_front (&ready_list), struct thread, elem);
@@ -657,23 +706,24 @@ next_mlfqs_thread_to_run(void) {
 	struct thread* thrd;
 	// printf("ready_threads: %d\n", ready_threads);
 	if (ready_threads == 0){
-		return idle_thread;
+		// printf("ready_threads = 0\n");
+		return thread_current();
 	}
 	else {
-		ready_threads -= 1;
 		struct list *mlfq;
 		for(int i = PRI_MAX; i >= PRI_MIN; i--) {
 			mlfq = &multiple_ready_list[i];
 			// list_thread_dump(mlfq);
 			if(list_empty(mlfq)) continue;
 			// printf("list안의 갯수 %d", list_size(mlfq));
-			list_sort(mlfq, bigger_base_priority, NULL);
+			// list_sort(mlfq, bigger_base_priority, NULL);
 			thrd = list_entry (list_pop_front (mlfq), struct thread, elem);
+			ready_threads -= 1;
 			ASSERT(is_thread(thrd));
 			// printf("쓰레드 명: %s\n",thrd->name);
 			return thrd;
 		}
-		return idle_thread;
+		ASSERT(false);
 	}
 }
 
