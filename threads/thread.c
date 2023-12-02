@@ -59,7 +59,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
-static struct list[MAX_SIZE] multiple_ready_list;
+static struct list multiple_ready_list[PRI_MAX - PRI_MIN + 1];
 static fixed_point load_avg;
 static int ready_threads;
 
@@ -390,7 +390,7 @@ thread_get_priority (void) {
 		return thread_get_priority2(thisThrd);
 	}
 	else {
-		return thread_get_base_priority(thisThrd):
+		return thread_get_base_priority(thisThrd);
 	}
 }
 
@@ -484,6 +484,15 @@ thread_get_recent_cpu (void) {
 	struct thread* thrd = thread_current();
 	return (thrd -> recent_cpu) * 100;		//TODO:반올림 연산 정의
 }
+
+int 
+thread_set_recent_cpu (void){
+	int nice = thread_get_nice();
+	int load_avg = thread_get_load_avg();
+	int recent_cpu = thread_get_recent_cpu();
+	recent_cpu = (2 * load_avg)/(2 * load_avg + 1) * recent_cpu + nice;
+	return recent_cpu;
+} 
 
 int thread_calculate_priority(fixed_point recent_cpu, int nice) {
 	struct thread* thrd = thread_current();
@@ -585,8 +594,8 @@ next_mlfqs_thread_to_run(void) {
 	else {
 		ready_threads -= 1;
 		struct list *mlfq;
-		for(i = PRI_MAX; i >= PRI_MIN; i--) {
-			mlfq = multiple_ready_list[i];
+		for(int i = PRI_MAX; i >= PRI_MIN; i--) {
+			mlfq = &multiple_ready_list[i];
 			if(list_empty(mlfq)) continue;
 			list_sort(mlfq, bigger_base_priority, NULL);
 			return list_entry (list_pop_front (mlfq), struct thread, elem);
@@ -749,7 +758,12 @@ do_schedule(int status) {
 static void
 schedule (void) {
 	struct thread *curr = running_thread ();
-	struct thread *next = next_thread_to_run ();
+	struct thread *next;
+	if (!thread_mlfqs ){
+		next = next_thread_to_run ();
+	}else{
+		next = next_mlfqs_thread_to_run();
+	}
 
 	ASSERT (intr_get_level () == INTR_OFF);
 	ASSERT (curr->status != THREAD_RUNNING);

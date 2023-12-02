@@ -154,7 +154,7 @@ void thread_set_priority (int);
 int thread_get_base_priority(struct thread *);
 void thread_donate_priority(struct thread *, struct thread *);
 void thread_recall_priority(struct lock *lock);
-int thread_calculate_priority(fixed_point, int)
+int thread_calculate_priority(fixed_point, int);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
