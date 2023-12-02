@@ -284,16 +284,16 @@ thread_unblock (struct thread *t) {
 
 	ASSERT (is_thread (t));
 
+
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	if(!thread_mlfqs) {
-	list_insert_ordered(&ready_list, &t->elem, bigger_priority, NULL);
-	// list_push_back (&ready_list, &t->elem);//?
+		list_insert_ordered(&ready_list, &t->elem, bigger_priority, NULL);
 	}
 	else {
-		// TODO: 우선순위 큐에 스레드 넣자
-		// TODO: idle은 빼고
+		// TIL: idle은 if(ready_list=empty) 일때 실행되기 때문에 count 안해도됌
 		ready_threads += 1;
+		list_insert_ordered(&multiple_ready_list[t->base_priority], &t->elem, bigger_base_priority, NULL);
 	}
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
@@ -452,9 +452,7 @@ thread_set_nice (int nice) {
 
 	struct thread* thrd = thread_current();
 	thrd -> niceness = nice;
-
-	int recent_cpu = thread_get_recent_cpu();
-	thread_calculate_priority(recent_cpu, nice);
+	thread_calculate_priority(thrd);
 }
 
 /* Returns the current thread's nice value. */
@@ -468,13 +466,14 @@ thread_get_nice (void) {
 void
 thread_set_load_avg (void) {
 	load_avg = (59/60) * load_avg + (1/60) * ready_threads;
-	return ;		//TODO: 반올림 연산
+	return ;		
 }
+ 
 
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) {
-	return load_avg * 100;		//TODO: 반올림 연산
+	return fp_to_int_round_near(load_avg * 100);	
 }
 
 
@@ -482,21 +481,57 @@ thread_get_load_avg (void) {
 int
 thread_get_recent_cpu (void) {
 	struct thread* thrd = thread_current();
-	return (thrd -> recent_cpu) * 100;		//TODO:반올림 연산 정의
+	return fp_to_int_round_near(thrd -> recent_cpu * 100);		
 }
 
 int 
-thread_set_recent_cpu (void){
-	int nice = thread_get_nice();
-	int load_avg = thread_get_load_avg();
-	int recent_cpu = thread_get_recent_cpu();
+thread_calculate_recent_cpu (struct thread* thrd){
+	int nice = thrd->niceness;
+	int recent_cpu = thrd->recent_cpu;
 	recent_cpu = (2 * load_avg)/(2 * load_avg + 1) * recent_cpu + nice;
 	return recent_cpu;
 } 
 
-int thread_calculate_priority(fixed_point recent_cpu, int nice) {
-	struct thread* thrd = thread_current();
+int thread_calculate_priority(struct thread* thrd) {
+	int recent_cpu = thrd->recent_cpu;
+	int nice = thrd->niceness;
 	thrd -> base_priority = PRI_MAX - (recent_cpu / 4) - (nice * 2);
+}
+
+void thread_calculate_priority_all (void){
+	//current_thread
+	thread_calculate_priority(thread_current());
+	//multiple_ready_list
+	struct list *list;
+	for (int i = PRI_MAX; i >= PRI_MIN; i--){
+		list = &multiple_ready_list[i];
+		execute_func_in_list(list, thread_calculate_priority, NULL);
+	}
+	//sleep list
+	execute_func_in_list(&sleep_list, thread_calculate_priority, NULL);
+}
+
+//TIL
+void execute_func_in_list(struct list* list, list_exec_func func, void *aux){
+	if(list_empty(list)) return;
+	struct list_elem * e;
+	struct thread* thrd;
+	for (e = list_begin (list); e != list_end (list); e = list_next (e)){
+		thrd = list_entry(e, struct thread, elem);
+		list_exec_func(thrd);
+	}
+}
+
+void thread_calculate_recent_cpu_all(void){
+	thread_calculate_recent_cpu(thread_current());
+	//multiple_ready_list
+	struct list *list;
+	for (int i = PRI_MAX; i >= PRI_MIN; i--){
+		list = &multiple_ready_list[i];
+		execute_func_in_list(list, thread_calculate_recent_cpu, NULL);
+	}
+	//sleep list
+	execute_func_in_list(&sleep_list, thread_calculate_recent_cpu, NULL);
 }
 
 
@@ -560,13 +595,15 @@ init_thread (struct thread *t, const char *name, int priority) {
 	t->status = THREAD_BLOCKED;
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
-	t->base_priority = priority;
 
 	if(!thread_mlfqs) {
+		t->base_priority = priority;
 		t->priority = priority;
 		list_init(&(t->donor_list));
 	}
 	else {
+		struct thread *parent_thread = thread_current();
+		t->base_priority = thread_calculate_priority(parent_thread);
 		t->priority = PRI_MAX + 1;
 	} 
 

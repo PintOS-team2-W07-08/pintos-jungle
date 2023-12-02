@@ -131,6 +131,22 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	thread_tick ();
 	//최소틱
 	struct list_elem* elem = getSleep_list();
+	
+	if(thread_mlfqs){
+		//recent cpu 증가
+		thread_current()->recent_cpu+=1;
+
+		//1초 (100틱) 마다
+		if (timer_ticks() % TIMER_FREQ == 0 ){
+			thread_set_load_avg();
+			thread_calcuate_recent_cpu_all();
+		}
+		//4틱 마다
+		if (timer_ticks() % 4 == 0){
+			thread_calculate_priority_all();
+		}
+	}
+
 	// printf("wakeup tick: %d global tick: %d\n", thrdp->wakeup_tick, timer_ticks());
 	while (elem != getTail()) {
 		// 
