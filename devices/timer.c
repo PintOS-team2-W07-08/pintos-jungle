@@ -139,7 +139,7 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 		//1초 (100틱) 마다
 		if (timer_ticks() % TIMER_FREQ == 0 ){
 			thread_set_load_avg();
-			thread_calcuate_recent_cpu_all();
+			thread_calculate_recent_cpu_all();
 		}
 		//4틱 마다
 		if (timer_ticks() % 4 == 0){

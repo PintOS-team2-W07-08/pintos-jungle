@@ -151,8 +151,6 @@ typedef bool list_less_func (const struct list_elem *a,
 /*Executing function for each element in list*/
 typedef void list_exec_func (const struct thread * thrd, void *aux);
 
-
-
 /* Operations on lists with ordered elements. */
 void list_sort (struct list *,
                 list_less_func *, void *aux);

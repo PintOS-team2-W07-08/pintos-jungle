@@ -61,7 +61,7 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
 bool thread_mlfqs;
 static struct list multiple_ready_list[PRI_MAX - PRI_MIN + 1];
 static fixed_point load_avg;
-static int ready_threads;
+static int ready_threads = 1;
 
 static void kernel_thread (thread_func *, void *aux);
 
@@ -117,7 +117,17 @@ thread_init (void) {
 
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
-	list_init (&ready_list);
+
+	if(!thread_mlfqs){
+		list_init (&ready_list);
+	}else{
+		// printf("multiple_ready_list\n");
+		for (int i = PRI_MIN; i<=PRI_MAX; i++){
+			// printf("multipe_ready_list %d is null: %d\n", i, &multiple_ready_list[i]==NULL);
+			list_init(&multiple_ready_list[i]);
+		}
+	}
+
 	list_init (&destruction_req);
 	list_init (&sleep_list);
 
@@ -284,7 +294,6 @@ thread_unblock (struct thread *t) {
 
 	ASSERT (is_thread (t));
 
-
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	if(!thread_mlfqs) {
@@ -357,7 +366,12 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread)
-		list_push_back (&ready_list, &curr->elem);
+		if(!thread_mlfqs){
+			list_push_back (&ready_list, &curr->elem);
+		}else{
+			// printf("multiple[%d]에 push\n",curr->base_priority);
+			list_push_back(&multiple_ready_list[curr->base_priority], &curr->elem);
+		}
 
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
@@ -407,6 +421,8 @@ thread_get_base_priority(struct thread* Thread){
 
 void 
 thread_donate_priority(struct thread* toThread, struct thread* donor){
+	if(thread_mlfqs) return; //TIL
+
 	// printf("우선권 기부하기 -> %d\n", prioirty);
 	ASSERT(&(toThread->donor_list)!=NULL);
 	struct thread* nowThrd = toThread;
@@ -426,6 +442,8 @@ thread_donate_priority(struct thread* toThread, struct thread* donor){
 
 void 
 thread_recall_priority(struct lock *lock){
+	if(thread_mlfqs) return; //TIL
+
 	struct thread* thrd = thread_current();
 	// printf("우선권 반납준비\n");
 	ASSERT(&(thrd->donor_list)!=NULL);
@@ -449,7 +467,6 @@ thread_recall_priority(struct lock *lock){
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice) {
-
 	struct thread* thrd = thread_current();
 	thrd -> niceness = nice;
 	thread_calculate_priority(thrd);
@@ -484,18 +501,21 @@ thread_get_recent_cpu (void) {
 	return fp_to_int_round_near(thrd -> recent_cpu * 100);		
 }
 
-int 
+void
 thread_calculate_recent_cpu (struct thread* thrd){
 	int nice = thrd->niceness;
 	int recent_cpu = thrd->recent_cpu;
 	recent_cpu = (2 * load_avg)/(2 * load_avg + 1) * recent_cpu + nice;
-	return recent_cpu;
+	thrd->recent_cpu = recent_cpu;
+	return;
 } 
 
-int thread_calculate_priority(struct thread* thrd) {
+void thread_calculate_priority(struct thread* thrd) {
 	int recent_cpu = thrd->recent_cpu;
 	int nice = thrd->niceness;
-	thrd -> base_priority = PRI_MAX - (recent_cpu / 4) - (nice * 2);
+	int base_priority = PRI_MAX - (recent_cpu / 4) - (nice * 2);
+	thrd -> base_priority = base_priority;
+	return;
 }
 
 void thread_calculate_priority_all (void){
@@ -602,8 +622,15 @@ init_thread (struct thread *t, const char *name, int priority) {
 		list_init(&(t->donor_list));
 	}
 	else {
-		struct thread *parent_thread = thread_current();
-		t->base_priority = thread_calculate_priority(parent_thread);
+		struct thread *parent_thread = running_thread();
+		if(is_thread(parent_thread)){
+			t->niceness = parent_thread->niceness;
+			t->recent_cpu = parent_thread->recent_cpu;
+		}else{
+			t->niceness = 0;
+			t->recent_cpu = 0;
+		}
+		thread_calculate_priority(t);
 		t->priority = PRI_MAX + 1;
 	} 
 
@@ -627,19 +654,28 @@ next_thread_to_run (void) {
 
 static struct thread * 
 next_mlfqs_thread_to_run(void) {
-	if (ready_threads == 0) return idle_thread;
+	struct thread* thrd;
+	// printf("ready_threads: %d\n", ready_threads);
+	if (ready_threads == 0){
+		return idle_thread;
+	}
 	else {
 		ready_threads -= 1;
 		struct list *mlfq;
 		for(int i = PRI_MAX; i >= PRI_MIN; i--) {
 			mlfq = &multiple_ready_list[i];
+			// list_thread_dump(mlfq);
 			if(list_empty(mlfq)) continue;
+			// printf("list안의 갯수 %d", list_size(mlfq));
 			list_sort(mlfq, bigger_base_priority, NULL);
-			return list_entry (list_pop_front (mlfq), struct thread, elem);
+			thrd = list_entry (list_pop_front (mlfq), struct thread, elem);
+			ASSERT(is_thread(thrd));
+			// printf("쓰레드 명: %s\n",thrd->name);
+			return thrd;
 		}
+		return idle_thread;
 	}
 }
-
 
 bool bigger_base_priority(const struct list_elem *a, 
 				   const struct list_elem *b, 
@@ -796,9 +832,12 @@ static void
 schedule (void) {
 	struct thread *curr = running_thread ();
 	struct thread *next;
-	if (!thread_mlfqs ){
-		next = next_thread_to_run ();
+	// printf("thread_mlfqs : %d\n", thread_mlfqs);
+	if (!thread_mlfqs){
+		// printf("거짓\n");
+		next = next_thread_to_run();
 	}else{
+		// printf("참\n");
 		next = next_mlfqs_thread_to_run();
 	}
 

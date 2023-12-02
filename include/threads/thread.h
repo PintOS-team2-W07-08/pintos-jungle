@@ -146,6 +146,7 @@ void thread_yield (void);
 
 bool bigger_priority(const struct list_elem *, const struct list_elem *, void *);
 bool bigger_priority_donor(const struct list_elem *, const struct list_elem *, void *);
+bool bigger_base_priority(const struct list_elem *, const struct list_elem *, void *);
 
 int thread_get_priority (void);
 int thread_get_priority2(struct thread*);
@@ -155,8 +156,8 @@ int thread_get_base_priority(struct thread *);
 void thread_donate_priority(struct thread *, struct thread *);
 void thread_recall_priority(struct lock *lock);
 
-int thread_calculate_priority(struct thread *thrd);
-int thread_calculate_recent_cpu(struct thread *thrd);
+void thread_calculate_priority(struct thread *thrd);
+void thread_calculate_recent_cpu(struct thread *thrd);
 void thread_calculate_priority_all (void);
 void thread_calculate_recent_cpu_all(void);
 
