@@ -302,9 +302,13 @@ thread_unblock (struct thread *t) {
 		list_insert_ordered(&ready_list, &t->elem, bigger_priority, NULL);
 	}
 	else {
-		// TIL: idle은 if(ready_list=empty) 일때 실행되기 때문에 count 안해도됌
+		// ASSERT(strcmp(t->name,"idle")!=0);
+		// if(strcmp(t->name,"idle")!=0){
+			
+		// }
 		list_push_back(&multiple_ready_list[t->base_priority], &(t->elem));
 		ready_threads += 1;
+		// TIL: idle은 if(ready_list=empty) 일때 실행되기 때문에 count 안해도됌
 	}
 	t->status = THREAD_READY;
 	intr_set_level (old_level);
@@ -368,13 +372,14 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread){
-		if(!thread_mlfqs){
-			list_push_back (&ready_list, &curr->elem);
-		}else{
-			// printf("multiple[%d]에 push\n",curr->base_priority);
-			list_push_back(&multiple_ready_list[curr->base_priority], &curr->elem);
-			ready_threads += 1;
-		}
+		
+	}
+	if(!thread_mlfqs){
+		list_push_back (&ready_list, &curr->elem);
+	}else{
+		// printf("multiple[%d]에 push\n",curr->base_priority);
+		list_push_back(&multiple_ready_list[curr->base_priority], &curr->elem);
+		ready_threads += 1;
 	}
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
@@ -597,6 +602,7 @@ void thread_calculate_priority(struct thread *thrd, void *aux) {
 	bool in_ready_list = (bool *)aux == (bool *)1;
 	if(in_ready_list){ //ready 여부
 		ASSERT(in_ready_list==true);
+		ASSERT(thrd!=idle_thread);
 		list_remove(e);
 		list_push_back(&multiple_ready_list[trun_priority], e);
 	}
@@ -755,9 +761,11 @@ next_thread_to_run (void) {
 
 static struct thread * 
 next_mlfqs_thread_to_run(void) {
+
+	struct thread* run_thrd = running_thread();
 	// printf("ready_threads: %d\n", ready_threads);
 	if (ready_threads == 0){
-		if(running_thread()->status==THREAD_RUNNING){
+		if(run_thrd->status==THREAD_RUNNING){
 			return thread_current();
 		}else{
 			return idle_thread;
@@ -765,6 +773,13 @@ next_mlfqs_thread_to_run(void) {
 		// printf("ready_threads = 0\n");
 	}
 	else {
+
+		ASSERT(run_thrd->status==THREAD_BLOCKED);
+		ASSERT(run_thrd!=idle_thread);
+		if(run_thrd->status==THREAD_BLOCKED && run_thrd!=idle_thread){
+			thread_unblock(run_thrd);
+		}
+
 		struct list *mlfq;
 		struct thread* thrd;
 		// lock_acquire(&mlfq_lock);
@@ -787,17 +802,7 @@ next_mlfqs_thread_to_run(void) {
 	}
 }
 
-bool bigger_base_priority(const struct list_elem *a, 
-				   const struct list_elem *b, 
-				   void *aux UNUSED){
-	struct thread *threadA = list_entry(a, struct thread, elem);
-	struct thread *threadB = list_entry(b, struct thread, elem);
-	if(threadA->base_priority > threadB->base_priority){
-		return true;
-	}else{
-		return false;
-	}
-}
+
 
 bool less_wakeup_tick(const struct list_elem *a, 
 				   const struct list_elem *b, 
@@ -817,6 +822,18 @@ bool bigger_priority(const struct list_elem *a,
 	struct thread *threadA = list_entry(a, struct thread, elem);
 	struct thread *threadB = list_entry(b, struct thread, elem);
 	if(threadA->priority > threadB->priority){
+		return true;
+	}else{
+		return false;
+	}
+}
+
+bool bigger_base_priority(const struct list_elem *a, 
+				   const struct list_elem *b, 
+				   void *aux UNUSED){
+	struct thread *threadA = list_entry(a, struct thread, elem);
+	struct thread *threadB = list_entry(b, struct thread, elem);
+	if(threadA->base_priority > threadB->base_priority){
 		return true;
 	}else{
 		return false;

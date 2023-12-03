@@ -1,3 +1,5 @@
+#include <stdint.h>
+
 typedef int32_t fixed_point;
 
 fixed_point int_to_fp(int);
