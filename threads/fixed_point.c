@@ -1,7 +1,7 @@
 #include <stdint.h>
 #include "threads/fixed_point.h"
 
-#define F (2<<14)
+#define F (1<<14)
 
 fixed_point int_to_fp(int n) {
     fixed_point fn = n * F;

@@ -263,9 +263,9 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
-	if(t!=thread_current() && (name,"idle")==0 && t->base_priority > thread_current()->base_priority){
-		thread_launch(t);
-	}
+	// if(t!=thread_current() && (name,"idle")==0 && t->base_priority > thread_current()->base_priority){
+	// 	thread_launch(t);
+	// }
 	thread_preemtion();
 
 	return tid;
@@ -306,8 +306,11 @@ thread_unblock (struct thread *t) {
 	}
 	else {
 		// ASSERT(strcmp(t->name,"idle")!=0);
-		if(strcmp(t->name,"idle")!=0){
-			list_push_back(&multiple_ready_list[t->base_priority], &(t->elem));
+		// if(strcmp(t->name,"idle")!=0){
+			
+		// }
+		list_push_back(&multiple_ready_list[t->base_priority], &(t->elem));
+		if(t==idle_thread){
 			ready_threads += 1;
 		}
 		// TIL: idle은 if(ready_list=empty) 일때 실행되기 때문에 count 안해도됌
@@ -591,6 +594,9 @@ thread_get_recent_cpu (void) {
 
 void
 thread_calculate_recent_cpu (struct thread* thrd, void *aux UNUSED){
+	ASSERT(thrd!=idle_thread);
+	if(thrd==idle_thread) return;
+	
 	int nice = thrd->niceness;
 	fixed_point recent_cpu = thrd->recent_cpu;
 	fixed_point decay_child = fp_mult_int(load_avg,2);
@@ -602,6 +608,9 @@ thread_calculate_recent_cpu (struct thread* thrd, void *aux UNUSED){
 } 
 
 void thread_calculate_priority(struct thread *thrd, void *aux) {
+	ASSERT(thrd!=idle_thread);
+	if(thrd==idle_thread) return;
+
 	fixed_point recent_cpu = thrd->recent_cpu;
 	int nice = thrd->niceness;
 
@@ -631,7 +640,8 @@ void thread_calculate_priority_all(void){
 	
 	//multiple_ready_list
 	struct list *list;
-	if(ready_threads!=0){
+	ASSERT(ready_threads>0);
+	if(ready_threads>0){
 		// lock_acquire(&mlfq_lock);
 		
 		for (int i = PRI_MAX; i >= PRI_MIN; i--){
@@ -779,6 +789,7 @@ static struct thread *
 next_mlfqs_thread_to_run(void) {
 
 	struct thread* run_thrd = running_thread();
+	ASSERT(ready_threads>0);
 	// printf("ready_threads: %d\n", ready_threads);
 	if (ready_threads == 0){
 		if(run_thrd->status==THREAD_RUNNING){
@@ -793,11 +804,11 @@ next_mlfqs_thread_to_run(void) {
 	}
 	else {
 
-		ASSERT(run_thrd->status==THREAD_BLOCKED);
-		ASSERT(run_thrd!=idle_thread);
-		if(run_thrd->status==THREAD_BLOCKED && run_thrd!=idle_thread){
-			thread_unblock(run_thrd);
-		}
+		// ASSERT(run_thrd->status==THREAD_BLOCKED);
+		// ASSERT(run_thrd!=idle_thread);
+		// if(run_thrd->status==THREAD_BLOCKED && run_thrd!=idle_thread){
+		// 	thread_unblock(run_thrd);
+		// }
 
 		struct list *mlfq;
 		struct thread* thrd;
@@ -809,8 +820,9 @@ next_mlfqs_thread_to_run(void) {
 			// printf("list안의 갯수 %d", list_size(mlfq));
 			list_sort(mlfq, bigger_base_priority, NULL);
 			thrd = list_entry(list_pop_front(mlfq), struct thread, elem);
-			ready_threads -= 1;
-			
+			if(thrd!=idle_thread){
+				ready_threads -= 1;
+			}
 			// printf("쓰레드 명: %s\n",thrd->name);
 			break;
 		}
