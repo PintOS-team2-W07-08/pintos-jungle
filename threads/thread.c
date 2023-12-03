@@ -523,7 +523,19 @@ thread_get_nice (void) {
 /* Set the system load average. */
 void
 thread_set_load_avg (void) {
-	load_avg = (59/60) * load_avg + (1/60) * ready_threads;
+	int ready_threads_with_run = ready_threads;
+	if(thread_current()!=idle_thread){
+		ready_threads_with_run+=1;
+	} 
+	fixed_point f60 = int_to_fp(60);
+	fixed_point f59 = int_to_fp(59);
+	fixed_point f1 = int_to_fp(1);
+	fixed_point f59_60 = fp_div_fp(f59,f60);
+	fixed_point f1_60 = fp_div_fp(f1,f60);
+	//fp_add_fp;
+	fixed_point pre = fp_mult_fp(f59_60,load_avg);
+	fixed_point post = fp_mult_int(f1_60, ready_threads_with_run);
+	load_avg = fp_add_fp(pre,post);
 	return ;		
 }
  
@@ -531,7 +543,7 @@ thread_set_load_avg (void) {
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) {
-	return fp_to_int_round_near(load_avg * 100);	
+	return fp_to_int_round_near(fp_mult_int(load_avg, 100));	
 }
 
 
@@ -539,29 +551,38 @@ thread_get_load_avg (void) {
 int
 thread_get_recent_cpu (void) {
 	struct thread* thrd = thread_current();
-	return fp_to_int_round_near(thrd -> recent_cpu * 100);		
+	return fp_to_int_round_near(fp_mult_int(thrd -> recent_cpu, 100));		
 }
 
 void
 thread_calculate_recent_cpu (struct thread* thrd, void *aux){
 	int nice = thrd->niceness;
-	int recent_cpu = thrd->recent_cpu;
-	recent_cpu = (2 * load_avg)/(2 * load_avg + 1) * recent_cpu + nice;
+	fixed_point recent_cpu = thrd->recent_cpu;
+	fixed_point decay_child = fp_mult_int(load_avg,2);
+	fixed_point decay_parent = fp_add_int(decay_child,1);
+	fixed_point decay = fp_div_fp(decay_child,decay_parent); 
+	recent_cpu = fp_add_int(fp_mult_fp(decay, recent_cpu) ,nice);
 	thrd->recent_cpu = recent_cpu;
 	return;
 } 
 
 void thread_calculate_priority(struct thread *thrd, void *aux) {
-	int recent_cpu = thrd->recent_cpu;
+	fixed_point recent_cpu = thrd->recent_cpu;
 	int nice = thrd->niceness;
-	int base_priority = PRI_MAX - (recent_cpu / 4) - (nice * 2);
-	thrd -> base_priority = base_priority;
+
+	fixed_point cpu_4 = fp_div_int(recent_cpu,4);
+	fixed_point fixed_PRI_MAX = int_to_fp(PRI_MAX);
+	// int checkPRI_MAX = fp_to_int_round_near(fixed_PRI_MAX);
+
+	fixed_point priority = fp_sub_int(fp_sub_fp(fixed_PRI_MAX,cpu_4), (nice * 2));
+	int trun_priority = fp_to_int_round_near(priority);
+	thrd -> base_priority = trun_priority;
 	
 	struct elem *e = &thrd->elem;
 
 	if(aux){ //ready 여부
 		list_remove(e);
-		list_push_back(&multiple_ready_list[base_priority], e);
+		list_push_back(&multiple_ready_list[trun_priority], e);
 	}
 	return;
 }
@@ -706,8 +727,12 @@ next_mlfqs_thread_to_run(void) {
 	struct thread* thrd;
 	// printf("ready_threads: %d\n", ready_threads);
 	if (ready_threads == 0){
+		if(running_thread()->status==THREAD_RUNNING){
+			return thread_current();
+		}else{
+			return idle_thread;
+		}
 		// printf("ready_threads = 0\n");
-		return thread_current();
 	}
 	else {
 		struct list *mlfq;
