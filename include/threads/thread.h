@@ -175,8 +175,7 @@ void thread_set_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
-static void
-thread_launch (struct thread *th);
+// static void thread_launch (struct thread *th);
 
 void list_thread_dump(struct list *);
 

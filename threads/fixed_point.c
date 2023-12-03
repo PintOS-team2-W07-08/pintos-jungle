@@ -40,7 +40,7 @@ fixed_point fp_sub_int(fixed_point x, int n) {
 }
 
 fixed_point fp_mult_fp(fixed_point x, fixed_point y) {
-    return ((int64_t) x) * y / F;
+    return ((int64_t) (x)) * y / F;
 }
 
 fixed_point fp_mult_int(fixed_point x, int n) {
@@ -48,7 +48,7 @@ fixed_point fp_mult_int(fixed_point x, int n) {
 }
 
 fixed_point fp_div_fp(fixed_point x, fixed_point y) {
-    return ((int64_t) x) * F / y;
+    return ((int64_t) (x)) * F / y;
 }
 
 fixed_point fp_div_int(fixed_point x, int n) {

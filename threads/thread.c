@@ -33,7 +33,6 @@
 static struct list ready_list;
 static struct list sleep_list;
 
-
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -61,6 +60,8 @@ static unsigned thread_ticks;   /* # of timer ticks since last yield. */
    Controlled by kernel command-line option "-o mlfqs". */
 bool thread_mlfqs;
 static struct list multiple_ready_list[PRI_MAX - PRI_MIN + 1];
+static struct list temp_ready_list[PRI_MAX - PRI_MIN + 1];
+
 static fixed_point load_avg;
 static int ready_threads = 0;
 
@@ -127,6 +128,7 @@ thread_init (void) {
 		for (int i = PRI_MIN; i<=PRI_MAX; i++){
 			// printf("multipe_ready_list %d is null: %d\n", i, &multiple_ready_list[i]==NULL);
 			list_init(&multiple_ready_list[i]);
+			list_init(&temp_ready_list[i]);
 		}
 	}
 
@@ -622,16 +624,18 @@ void thread_calculate_priority(struct thread *thrd, void *aux) {
 
 	fixed_point priority = fp_sub_int(fp_sub_fp(fixed_PRI_MAX,cpu_4), (nice * 2));
 	int trun_priority = fp_to_int_round_near(priority);
+	
+	int before_priority = thrd -> base_priority;
 	thrd -> base_priority = trun_priority;
 	
 	struct list_elem *e = &(thrd->elem);
 
 	bool in_ready_list = (bool *)aux == (bool *)1;
-	if(in_ready_list){ //ready 여부
+	if(in_ready_list && before_priority!=trun_priority){ //ready 여부
 		ASSERT(in_ready_list==true);
 		ASSERT(thrd!=idle_thread);
 		list_remove(e);
-		list_push_back(&multiple_ready_list[trun_priority], e);
+		list_push_back(&temp_ready_list[trun_priority], e);
 	}
 	return;
 }
@@ -649,6 +653,15 @@ void thread_calculate_priority_all(void){
 		for (int i = PRI_MAX; i >= PRI_MIN; i--){
 			list = &multiple_ready_list[i];
 			execute_func_in_list(list, thread_calculate_priority, (bool *)true);
+		}
+
+		//swap
+		struct list *temp;
+
+		for (int i = PRI_MIN; i <= PRI_MAX; i++) {
+			temp = &multiple_ready_list[i - PRI_MIN];
+			multiple_ready_list[i - PRI_MIN] = temp_ready_list[i - PRI_MIN];
+			temp_ready_list[i - PRI_MIN] = *temp;
 		}
 		
 		// lock_release(&mlfq_lock);
@@ -791,20 +804,14 @@ static struct thread *
 next_mlfqs_thread_to_run(void) {
 
 	struct thread* run_thrd = running_thread();
-	ASSERT(ready_threads>0);
+	ASSERT(ready_threads>=0);
 	// printf("ready_threads: %d\n", ready_threads);
 	if (ready_threads == 0){
+		ASSERT(run_thrd->status!=THREAD_RUNNING);
 		if(run_thrd->status==THREAD_RUNNING){
 			return run_thrd;
-		}else if(idle_thread){
-			return idle_thread;
-		}else{
-			// run_thrd->status=THREAD_RUNNING;
-			return run_thrd;
 		}
-		// printf("ready_threads = 0\n");
-	}
-	else {
+	}else{
 
 		// ASSERT(run_thrd->status==THREAD_BLOCKED);
 		// ASSERT(run_thrd!=idle_thread);
@@ -815,7 +822,7 @@ next_mlfqs_thread_to_run(void) {
 		struct list *mlfq;
 		struct thread* thrd;
 		// lock_acquire(&mlfq_lock);
-		for(int i = PRI_MAX; i >= PRI_MIN; i--) {
+		for(int i = PRI_MAX; i >= run_thrd->base_priority; i--) {
 			mlfq = &multiple_ready_list[i];
 			// list_thread_dump(mlfq);
 			if(list_empty(mlfq)) continue;
@@ -827,12 +834,12 @@ next_mlfqs_thread_to_run(void) {
 				
 			// }
 			// printf("쓰레드 명: %s\n",thrd->name);
-			break;
+			ASSERT(is_thread(thrd));
+			return thrd;
 		}
 		ASSERT(is_thread(thrd));
 		// lock_release(&mlfq_lock);
-		return thrd;
-		ASSERT(false);
+		return run_thrd;
 	}
 }
 

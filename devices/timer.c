@@ -2,6 +2,7 @@
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
+#include <string.h>
 #include <stdio.h>
 
 #include <list.h>
