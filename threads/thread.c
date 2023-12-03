@@ -167,9 +167,9 @@ void thread_sleep(int64_t ticks){
 	if (curr != idle_thread){
 		curr->wakeup_tick = ticks;
 		list_push_back (&sleep_list, &curr->elem);
+		thread_block();
 	}
 	//global tick 업데이트 (thread_tick)
-	thread_block();
 	intr_set_level (old_level);
 };
 
@@ -393,14 +393,14 @@ thread_preemtion(void){
 			struct thread *curr = thread_current();
 			struct list_elem *e = mlfq_begin();
 			struct thread *first_thread = list_entry(e, struct thread, elem);
-			if(first_thread->priority > curr->priority){
+			if(first_thread->base_priority > curr->base_priority){
 				thread_yield();
 			}
 		}
 	}
 }
 
-struct thread* mlfq_begin(void){
+struct list_elem *mlfq_begin(void){
 	struct list *mlfq;
 	struct thread* thrd;
 	for(int i = PRI_MAX; i >= PRI_MIN; i--) {
@@ -409,10 +409,7 @@ struct thread* mlfq_begin(void){
 		if(list_empty(mlfq)) continue;
 		// printf("list안의 갯수 %d", list_size(mlfq));
 		// list_sort(mlfq, bigger_base_priority, NULL);
-		thrd = list_entry (list_front (mlfq), struct thread, elem);
-		ASSERT(is_thread(thrd));
-		// printf("쓰레드 명: %s\n",thrd->name);
-		return thrd;
+		return list_front(mlfq);
 	}
 }
 
@@ -508,8 +505,10 @@ void
 thread_set_nice (int nice) {
 	struct thread* thrd = thread_current();
 	thrd -> niceness = nice;
-	bool flag = thrd->status == THREAD_READY;
-	thread_calculate_priority(thrd, (bool *)flag);
+	// bool flag = thrd->status == THREAD_READY;
+	// ASSERT(thrd->status == THREAD_RUNNING);
+	// thread_calculate_priority(thrd, (bool *)flag);
+	thread_calculate_priority_all();
 	thread_preemtion();
 }
 
@@ -580,7 +579,9 @@ void thread_calculate_priority(struct thread *thrd, void *aux) {
 	
 	struct elem *e = &thrd->elem;
 
-	if(aux){ //ready 여부
+	bool in_ready_list = (bool *)aux == (bool *)1;
+	if(in_ready_list){ //ready 여부
+		ASSERT(in_ready_list==true);
 		list_remove(e);
 		list_push_back(&multiple_ready_list[trun_priority], e);
 	}
@@ -598,7 +599,7 @@ void thread_calculate_priority_all(void){
 	}
 	//sleep list
 	execute_func_in_list(&sleep_list, thread_calculate_priority, (bool *)false);
-	thread_preemtion();
+	// thread_preemtion();
 }
 
 //TIL
@@ -606,9 +607,9 @@ void execute_func_in_list(struct list *list, list_exec_func func, void *aux){
 	if(list_empty(list)) return;
 	struct list_elem * e;
 	struct thread* thrd;
-	for (e = list_begin (list); e != list_end (list); e = list_next (e)){
+	for (e = list_front (list); e != list_tail (list); e = list_next (e)){
 		thrd = list_entry(e, struct thread, elem);
-		func(thrd, aux);
+		func(thrd, (void *)aux);
 	}
 }
 
@@ -700,7 +701,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 			t->niceness = 0;
 			t->recent_cpu = 0;
 		}
-		thread_calculate_priority(t, false);
+		thread_calculate_priority(t, (bool *)false);
 		t->priority = PRI_MAX + 1;
 	} 
 

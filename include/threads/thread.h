@@ -145,7 +145,7 @@ void thread_exit (void) NO_RETURN;
 void thread_yield (void);
 void thread_preemtion(void);
 
-struct thread* mlfq_begin(void);
+struct list_elem *mlfq_begin(void);
 
 bool bigger_priority(const struct list_elem *, const struct list_elem *, void *);
 bool bigger_priority_donor(const struct list_elem *, const struct list_elem *, void *);
