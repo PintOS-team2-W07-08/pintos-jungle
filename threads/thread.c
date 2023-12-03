@@ -263,6 +263,9 @@ thread_create (const char *name, int priority,
 
 	/* Add to run queue. */
 	thread_unblock (t);
+	if(t!=thread_current() && (name,"idle")==0 && t->base_priority > thread_current()->base_priority){
+		thread_launch(t);
+	}
 	thread_preemtion();
 
 	return tid;
@@ -303,11 +306,10 @@ thread_unblock (struct thread *t) {
 	}
 	else {
 		// ASSERT(strcmp(t->name,"idle")!=0);
-		// if(strcmp(t->name,"idle")!=0){
-			
-		// }
-		list_push_back(&multiple_ready_list[t->base_priority], &(t->elem));
-		ready_threads += 1;
+		if(strcmp(t->name,"idle")!=0){
+			list_push_back(&multiple_ready_list[t->base_priority], &(t->elem));
+			ready_threads += 1;
+		}
 		// TIL: idle은 if(ready_list=empty) 일때 실행되기 때문에 count 안해도됌
 	}
 	t->status = THREAD_READY;
@@ -372,15 +374,15 @@ thread_yield (void) {
 
 	old_level = intr_disable ();
 	if (curr != idle_thread){
-		
+		if(!thread_mlfqs){
+			list_push_back (&ready_list, &curr->elem);
+		}else{
+			// printf("multiple[%d]에 push\n",curr->base_priority);
+			list_push_back(&multiple_ready_list[curr->base_priority], &curr->elem);
+			ready_threads += 1;
+		}
 	}
-	if(!thread_mlfqs){
-		list_push_back (&ready_list, &curr->elem);
-	}else{
-		// printf("multiple[%d]에 push\n",curr->base_priority);
-		list_push_back(&multiple_ready_list[curr->base_priority], &curr->elem);
-		ready_threads += 1;
-	}
+	
 	do_schedule (THREAD_READY);
 	intr_set_level (old_level);
 }
@@ -523,6 +525,8 @@ thread_recall_priority(struct lock *lock){
 /* Sets the current thread's nice value to NICE. */
 void
 thread_set_nice (int nice) {
+	enum intr_level old_level;
+	old_level = intr_disable ();
 	struct thread* thrd = thread_current();
 	thrd -> niceness = nice;
 	// bool flag = thrd->status == THREAD_READY;
@@ -530,13 +534,18 @@ thread_set_nice (int nice) {
 	// thread_calculate_priority(thrd, (bool *)flag);
 	thread_calculate_priority_all();
 	thread_preemtion();
+	intr_set_level (old_level);
 }
 
 /* Returns the current thread's nice value. */
 int
-thread_get_nice (void) {
+thread_get_nice (void) {  //TIL
+	enum intr_level old_level;
+	old_level = intr_disable ();
 	struct thread* thrd = thread_current();
-	return thrd -> niceness;
+	int result = thrd -> niceness;
+	intr_set_level (old_level);
+	return result;
 }
 
 /* Set the system load average. */
@@ -558,19 +567,26 @@ thread_set_load_avg (void) {
 	return ;		
 }
  
-
 /* Returns 100 times the system load average. */
 int
 thread_get_load_avg (void) {
-	return fp_to_int_round_near(fp_mult_int(load_avg, 100));	
+	enum intr_level old_level;
+	old_level = intr_disable ();
+	int result = fp_to_int_round_near(fp_mult_int(load_avg, 100));
+	intr_set_level (old_level);
+	return result;
 }
 
 
 /* Returns 100 times the current thread's recent_cpu value. */
 int
 thread_get_recent_cpu (void) {
+	enum intr_level old_level;
+	old_level = intr_disable ();
 	struct thread* thrd = thread_current();
-	return fp_to_int_round_near(fp_mult_int(thrd -> recent_cpu, 100));		
+	int result = fp_to_int_round_near(fp_mult_int(thrd -> recent_cpu, 100));
+	intr_set_level (old_level);
+	return result;
 }
 
 void
@@ -766,9 +782,12 @@ next_mlfqs_thread_to_run(void) {
 	// printf("ready_threads: %d\n", ready_threads);
 	if (ready_threads == 0){
 		if(run_thrd->status==THREAD_RUNNING){
-			return thread_current();
-		}else{
+			return run_thrd;
+		}else if(idle_thread){
 			return idle_thread;
+		}else{
+			// run_thrd->status=THREAD_RUNNING;
+			return run_thrd;
 		}
 		// printf("ready_threads = 0\n");
 	}
@@ -788,7 +807,7 @@ next_mlfqs_thread_to_run(void) {
 			// list_thread_dump(mlfq);
 			if(list_empty(mlfq)) continue;
 			// printf("list안의 갯수 %d", list_size(mlfq));
-			// list_sort(mlfq, bigger_base_priority, NULL);
+			list_sort(mlfq, bigger_base_priority, NULL);
 			thrd = list_entry(list_pop_front(mlfq), struct thread, elem);
 			ready_threads -= 1;
 			

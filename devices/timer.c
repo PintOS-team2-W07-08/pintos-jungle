@@ -133,7 +133,9 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	
 	if(thread_mlfqs){
 		//recent cpu 증가
-		thread_current()->recent_cpu = fp_add_int(thread_current()->recent_cpu,1);
+		if(strcmp(thread_current()->name,"idle")!=0){
+			thread_current()->recent_cpu = fp_add_int(thread_current()->recent_cpu,1);
+		}
 
 		//1초 (100틱) 마다
 		if (timer_ticks() % TIMER_FREQ == 0 ){
@@ -151,7 +153,7 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 	// printf("wakeup tick: %d global tick: %d\n", thrdp->wakeup_tick, timer_ticks());
 	while (elem != sleep_list_tail()) {
 		nexte = list_next(elem);
-		
+
 		struct thread* thrdp = list_entry (elem, struct thread, elem);
 		if(thrdp->wakeup_tick <= ticks){
 			list_remove(elem);
