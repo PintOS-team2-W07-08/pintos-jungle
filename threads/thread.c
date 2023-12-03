@@ -310,9 +310,10 @@ thread_unblock (struct thread *t) {
 			
 		// }
 		list_push_back(&multiple_ready_list[t->base_priority], &(t->elem));
-		if(t==idle_thread){
-			ready_threads += 1;
-		}
+		ready_threads += 1;
+		// if(t==idle_thread){
+			
+		// }
 		// TIL: idle은 if(ready_list=empty) 일때 실행되기 때문에 count 안해도됌
 	}
 	t->status = THREAD_READY;
@@ -379,11 +380,12 @@ thread_yield (void) {
 	if (curr != idle_thread){
 		if(!thread_mlfqs){
 			list_push_back (&ready_list, &curr->elem);
-		}else{
-			// printf("multiple[%d]에 push\n",curr->base_priority);
-			list_push_back(&multiple_ready_list[curr->base_priority], &curr->elem);
-			ready_threads += 1;
 		}
+	}
+	if(thread_mlfqs){
+		// printf("multiple[%d]에 push\n",curr->base_priority);
+		list_push_back(&multiple_ready_list[curr->base_priority], &curr->elem);
+		ready_threads += 1;
 	}
 	
 	do_schedule (THREAD_READY);
@@ -640,7 +642,7 @@ void thread_calculate_priority_all(void){
 	
 	//multiple_ready_list
 	struct list *list;
-	ASSERT(ready_threads>0);
+	ASSERT(ready_threads>=0);
 	if(ready_threads>0){
 		// lock_acquire(&mlfq_lock);
 		
@@ -820,9 +822,10 @@ next_mlfqs_thread_to_run(void) {
 			// printf("list안의 갯수 %d", list_size(mlfq));
 			list_sort(mlfq, bigger_base_priority, NULL);
 			thrd = list_entry(list_pop_front(mlfq), struct thread, elem);
-			if(thrd!=idle_thread){
-				ready_threads -= 1;
-			}
+			ready_threads -= 1;
+			// if(thrd!=idle_thread){
+				
+			// }
 			// printf("쓰레드 명: %s\n",thrd->name);
 			break;
 		}
