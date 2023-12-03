@@ -42,6 +42,7 @@ static struct thread *initial_thread;
 
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
+static struct lock mlfq_lock;
 
 /* Thread destruction requests */
 static struct list destruction_req;
@@ -117,6 +118,7 @@ thread_init (void) {
 
 	/* Init the globla thread context */
 	lock_init (&tid_lock);
+	lock_init (&mlfq_lock);
 
 	if(!thread_mlfqs){
 		list_init (&ready_list);
@@ -173,11 +175,12 @@ void thread_sleep(int64_t ticks){
 	intr_set_level (old_level);
 };
 
-struct list_elem *getSleep_list(){
+struct list_elem *get_sleep_list(){
+	list_sort(&sleep_list, less_wakeup_tick, NULL);
 	return list_begin (&sleep_list);
 }
 
-struct list_elem *getTail(void){
+struct list_elem *sleep_list_tail(void){
 	return list_tail(&sleep_list);
 }
 
@@ -299,7 +302,7 @@ thread_unblock (struct thread *t) {
 	}
 	else {
 		// TIL: idle은 if(ready_list=empty) 일때 실행되기 때문에 count 안해도됌
-		list_push_back(&multiple_ready_list[t->base_priority], &t->elem);
+		list_push_back(&multiple_ready_list[t->base_priority], &(t->elem));
 		ready_threads += 1;
 	}
 	t->status = THREAD_READY;
@@ -391,13 +394,23 @@ thread_preemtion(void){
 	}else{
 		if(ready_threads!=0){
 			struct thread *curr = thread_current();
-			struct list_elem *e = mlfq_begin();
-			struct thread *first_thread = list_entry(e, struct thread, elem);
-			if(first_thread->base_priority > curr->base_priority){
+			int ready_priority = highest_priority();
+			if(ready_priority > curr->base_priority){
+				printf("mlfq priority: %d\n", ready_priority);
 				thread_yield();
 			}
 		}
 	}
+}
+
+int highest_priority(void){
+	struct list *mlfq;
+	for(int i = PRI_MAX; i >= PRI_MIN; i--) {
+		mlfq = &multiple_ready_list[i];
+		if(!list_empty(mlfq)) return i;
+	}
+	ASSERT(false);
+	return -1;
 }
 
 struct list_elem *mlfq_begin(void){
@@ -494,7 +507,7 @@ thread_recall_priority(struct lock *lock){
 	}
 	if(!list_empty(list)){
 		list_sort(list, bigger_priority_donor, NULL);
-		thrd->priority=list_entry(list_front(list),struct thread, donor_elem)->priority;
+		thrd->priority = list_entry(list_front(list), struct thread, donor_elem)->priority;
 	}else{
 		thrd->priority = thrd->base_priority;
 	}
@@ -577,7 +590,7 @@ void thread_calculate_priority(struct thread *thrd, void *aux) {
 	int trun_priority = fp_to_int_round_near(priority);
 	thrd -> base_priority = trun_priority;
 	
-	struct elem *e = &thrd->elem;
+	struct elem *e = &(thrd->elem);
 
 	bool in_ready_list = (bool *)aux == (bool *)1;
 	if(in_ready_list){ //ready 여부
@@ -591,15 +604,28 @@ void thread_calculate_priority(struct thread *thrd, void *aux) {
 void thread_calculate_priority_all(void){
 	//current_thread
 	thread_calculate_priority(thread_current(),(bool *)false);
+	
 	//multiple_ready_list
 	struct list *list;
-	for (int i = PRI_MAX; i >= PRI_MIN; i--){
-		list = &multiple_ready_list[i];
-		execute_func_in_list(list, thread_calculate_priority, (bool *)true);
+	if(ready_threads!=0){
+		// lock_acquire(&mlfq_lock);
+		
+		for (int i = PRI_MAX; i >= PRI_MIN; i--){
+			list = &multiple_ready_list[i];
+			execute_func_in_list(list, thread_calculate_priority, (bool *)true);
+		}
+		
+		// lock_release(&mlfq_lock);
 	}
+	
 	//sleep list
-	execute_func_in_list(&sleep_list, thread_calculate_priority, (bool *)false);
+	if(!list_empty(&sleep_list)){	
+		// lock_acquire(&mlfq_lock);
+		execute_func_in_list(&sleep_list, thread_calculate_priority, (bool *)false);
+		// lock_release(&mlfq_lock);
+	}
 	// thread_preemtion();
+	
 }
 
 //TIL
@@ -607,7 +633,9 @@ void execute_func_in_list(struct list *list, list_exec_func func, void *aux){
 	if(list_empty(list)) return;
 	struct list_elem * e;
 	struct thread* thrd;
-	for (e = list_front (list); e != list_tail (list); e = list_next (e)){
+	struct list_elem *nexte;
+	for (e = list_front (list); e != list_tail (list); e = nexte){
+		nexte = list_next(e);
 		thrd = list_entry(e, struct thread, elem);
 		func(thrd, (void *)aux);
 	}
@@ -719,13 +747,12 @@ next_thread_to_run (void) {
 	if (list_empty (&ready_list)) return idle_thread; //thread_current();
 	else {
 		list_sort(&ready_list, bigger_priority, NULL);
-		return list_entry (list_pop_front (&ready_list), struct thread, elem);
+		return list_entry(list_pop_front (&ready_list), struct thread, elem);
 	}
 }
 
 static struct thread * 
 next_mlfqs_thread_to_run(void) {
-	struct thread* thrd;
 	// printf("ready_threads: %d\n", ready_threads);
 	if (ready_threads == 0){
 		if(running_thread()->status==THREAD_RUNNING){
@@ -737,18 +764,23 @@ next_mlfqs_thread_to_run(void) {
 	}
 	else {
 		struct list *mlfq;
+		struct thread* thrd;
+		// lock_acquire(&mlfq_lock);
 		for(int i = PRI_MAX; i >= PRI_MIN; i--) {
 			mlfq = &multiple_ready_list[i];
 			// list_thread_dump(mlfq);
 			if(list_empty(mlfq)) continue;
 			// printf("list안의 갯수 %d", list_size(mlfq));
 			// list_sort(mlfq, bigger_base_priority, NULL);
-			thrd = list_entry (list_pop_front (mlfq), struct thread, elem);
+			thrd = list_entry(list_pop_front(mlfq), struct thread, elem);
 			ready_threads -= 1;
-			ASSERT(is_thread(thrd));
+			
 			// printf("쓰레드 명: %s\n",thrd->name);
-			return thrd;
+			break;
 		}
+		ASSERT(is_thread(thrd));
+		// lock_release(&mlfq_lock);
+		return thrd;
 		ASSERT(false);
 	}
 }
@@ -759,6 +791,18 @@ bool bigger_base_priority(const struct list_elem *a,
 	struct thread *threadA = list_entry(a, struct thread, elem);
 	struct thread *threadB = list_entry(b, struct thread, elem);
 	if(threadA->base_priority > threadB->base_priority){
+		return true;
+	}else{
+		return false;
+	}
+}
+
+bool less_wakeup_tick(const struct list_elem *a, 
+				   const struct list_elem *b, 
+				   void *aux UNUSED){
+	struct thread *threadA = list_entry(a, struct thread, elem);
+	struct thread *threadB = list_entry(b, struct thread, elem);
+	if(threadA->wakeup_tick < threadB->wakeup_tick){
 		return true;
 	}else{
 		return false;
@@ -896,7 +940,7 @@ do_schedule(int status) {
 	ASSERT (thread_current()->status == THREAD_RUNNING);
 	while (!list_empty (&destruction_req)) {
 		struct thread *victim =
-			list_entry (list_pop_front (&destruction_req), struct thread, elem);
+			list_entry(list_pop_front (&destruction_req), struct thread, elem);
 		// free(victim->donor_list);
 		palloc_free_page(victim);
 	}

@@ -123,8 +123,8 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
-struct list_elem *getTail(void);
-struct list_elem * getSleep_list(void); //
+struct list_elem *sleep_list_tail(void);
+struct list_elem * get_sleep_list(void); //
 void thread_sleep(int64_t); //
 void thread_wakeup(struct thread*);//
 
@@ -146,7 +146,9 @@ void thread_yield (void);
 void thread_preemtion(void);
 
 struct list_elem *mlfq_begin(void);
+int highest_priority(void);
 
+bool less_wakeup_tick(const struct list_elem *, const struct list_elem *, void *);
 bool bigger_priority(const struct list_elem *, const struct list_elem *, void *);
 bool bigger_priority_donor(const struct list_elem *, const struct list_elem *, void *);
 bool bigger_base_priority(const struct list_elem *, const struct list_elem *, void *);
