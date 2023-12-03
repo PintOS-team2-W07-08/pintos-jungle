@@ -161,11 +161,12 @@ thread_start (void) {
 	내가 만든 함수
 */
 void thread_sleep(int64_t ticks){
-	struct thread *curr = thread_current ();
 	enum intr_level old_level;
-
-	ASSERT (!intr_context ());
+	struct thread *curr = thread_current ();
+	
 	old_level = intr_disable ();
+	ASSERT (!intr_context ());
+	
 	if (curr != idle_thread){
 		curr->wakeup_tick = ticks;
 		list_push_back (&sleep_list, &curr->elem);
@@ -184,7 +185,7 @@ struct list_elem *sleep_list_tail(void){
 	return list_tail(&sleep_list);
 }
 
-void thread_wakeup(struct thread* thrd){
+void thread_wakeup(struct thread* thrd UNUSED){
 	schedule();
 }
 
@@ -415,7 +416,6 @@ int highest_priority(void){
 
 struct list_elem *mlfq_begin(void){
 	struct list *mlfq;
-	struct thread* thrd;
 	for(int i = PRI_MAX; i >= PRI_MIN; i--) {
 		mlfq = &multiple_ready_list[i];
 		// list_thread_dump(mlfq);
@@ -424,6 +424,8 @@ struct list_elem *mlfq_begin(void){
 		// list_sort(mlfq, bigger_base_priority, NULL);
 		return list_front(mlfq);
 	}
+	ASSERT(false);
+	return NULL;
 }
 
 /* Sets the current thread's priority to NEW_PRIORITY. */
@@ -567,7 +569,7 @@ thread_get_recent_cpu (void) {
 }
 
 void
-thread_calculate_recent_cpu (struct thread* thrd, void *aux){
+thread_calculate_recent_cpu (struct thread* thrd, void *aux UNUSED){
 	int nice = thrd->niceness;
 	fixed_point recent_cpu = thrd->recent_cpu;
 	fixed_point decay_child = fp_mult_int(load_avg,2);
@@ -590,7 +592,7 @@ void thread_calculate_priority(struct thread *thrd, void *aux) {
 	int trun_priority = fp_to_int_round_near(priority);
 	thrd -> base_priority = trun_priority;
 	
-	struct elem *e = &(thrd->elem);
+	struct list_elem *e = &(thrd->elem);
 
 	bool in_ready_list = (bool *)aux == (bool *)1;
 	if(in_ready_list){ //ready 여부

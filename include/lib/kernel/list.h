@@ -148,10 +148,6 @@ typedef bool list_less_func (const struct list_elem *a,
                              const struct list_elem *b,
                              void *aux);
 
-/*Executing function for each element in list*/
-typedef void list_exec_func (const struct thread *thrd, 
-                              void *aux);
-
 /* Operations on lists with ordered elements. */
 void list_sort (struct list *,
                 list_less_func *, void *aux);
@@ -159,9 +155,6 @@ void list_insert_ordered (struct list *, struct list_elem *,
                           list_less_func *, void *aux);
 void list_unique (struct list *, struct list *duplicates,
                   list_less_func *, void *aux);
-
-/*Excute function on list*/
-void execute_func_in_list(struct list* list, list_exec_func func, void *aux);
 
 /* Max and min. */
 struct list_elem *list_max (struct list *, list_less_func *, void *aux);

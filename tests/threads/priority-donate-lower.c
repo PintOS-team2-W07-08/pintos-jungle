@@ -46,7 +46,7 @@ acquire_thread_func (void *lock_)
   struct lock *lock = lock_;
 
   lock_acquire (lock);
-  struct thread* thrd = thread_current();
+//   struct thread* thrd = thread_current();
   msg ("acquire: got the lock");
   lock_release (lock);
   msg ("acquire: done");
