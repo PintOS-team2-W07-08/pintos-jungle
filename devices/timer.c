@@ -149,20 +149,24 @@ timer_interrupt (struct intr_frame *args UNUSED) {
 		}
 	}
 
-	struct list_elem* elem = get_sleep_list();
-	struct list_elem* nexte;
-	// printf("wakeup tick: %d global tick: %d\n", thrdp->wakeup_tick, timer_ticks());
-	while (elem != sleep_list_tail()) {
-		nexte = list_next(elem);
+	if(get_global_wakeup_tick()>ticks){
+		return;
+	}
+	struct list_elem *elem = get_sleep_list_begin();
+	struct list_elem *next_elem;
+	
+	while (elem != get_sleep_list_tail()){
+		next_elem = list_next(elem);
 
-		struct thread* thrdp = list_entry (elem, struct thread, elem);
+		struct thread *thrdp = list_entry(elem, struct thread, elem);
 		if(thrdp->wakeup_tick <= ticks){
 			list_remove(elem);
 			thread_unblock(thrdp);
-		}else {
-			break;
+		}else{
+			set_global_wakeup_tick(thrdp->wakeup_tick);
+			break; //작으면 더이상 진행하지 않음.
 		}
-		elem = nexte;
+		elem = next_elem;
 	}
 }
 

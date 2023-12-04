@@ -33,6 +33,8 @@
 static struct list ready_list;
 static struct list sleep_list;
 
+static int64_t global_wakeup_tick;
+
 /* Idle thread. */
 static struct thread *idle_thread;
 
@@ -160,7 +162,7 @@ thread_start (void) {
 }
 
 /*
-	내가 만든 함수
+	wakeup_tick의 오름차순으로 sleep_list에 넣고, block한다.
 */
 void thread_sleep(int64_t ticks){
 	enum intr_level old_level;
@@ -169,26 +171,33 @@ void thread_sleep(int64_t ticks){
 	old_level = intr_disable ();
 	ASSERT (!intr_context ());
 	
-	if (curr != idle_thread){
+	if (curr != idle_thread ){
 		curr->wakeup_tick = ticks;
-		list_push_back (&sleep_list, &curr->elem);
+		list_insert_ordered(&sleep_list, &curr->elem, less_wakeup_tick, NULL);
+		if(ticks < global_wakeup_tick){
+			set_global_wakeup_tick(ticks);
+		}
 		thread_block();
 	}
 	//global tick 업데이트 (thread_tick)
 	intr_set_level (old_level);
 };
 
-struct list_elem *get_sleep_list(){
-	list_sort(&sleep_list, less_wakeup_tick, NULL);
+void set_global_wakeup_tick(int64_t ticks){
+	global_wakeup_tick=ticks;
+}
+
+int64_t get_global_wakeup_tick(void){
+	return global_wakeup_tick; 
+}
+
+struct list_elem *get_sleep_list_begin(void){
+	// list_sort(&sleep_list, less_wakeup_tick, NULL);
 	return list_begin (&sleep_list);
 }
 
-struct list_elem *sleep_list_tail(void){
+struct list_elem *get_sleep_list_tail(void){
 	return list_tail(&sleep_list);
-}
-
-void thread_wakeup(struct thread* thrd UNUSED){
-	schedule();
 }
 
 /* Called by the timer interrupt handler at each timer tick.
@@ -273,7 +282,12 @@ thread_create (const char *name, int priority,
 	return tid;
 }
 
-/* Puts the current thread to sleep.  It will not be scheduled
+/* 
+   BLOCK 상태로 바꾸고, 스케줄링(ready_list에서 다음 실행 쓰레드를 선택해 실행)
+   sleep_list나 ready_list에 넣은 뒤에 호출해야 다음 실행으로 잡힌다.
+   그렇지 않으면 메모리만 먹고, 죽지도 않음.
+
+   Puts the current thread to sleep.  It will not be scheduled
    again until awoken by thread_unblock().
 
    This function must be called with interrupts turned off.  It
@@ -287,7 +301,9 @@ thread_block (void) {
 	schedule ();
 }
 
-/* Transitions a blocked thread T to the ready-to-run state.
+/* 
+   상태를 READY로 바꾸고 ready_list에 집어넣는다. 
+   Transitions a blocked thread T to the ready-to-run state.
    This is an error if T is not blocked.  (Use thread_yield() to
    make the running thread ready.)
 
@@ -304,7 +320,7 @@ thread_unblock (struct thread *t) {
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	if(!thread_mlfqs) {
-		list_insert_ordered(&ready_list, &t->elem, bigger_priority, NULL);
+		list_push_back(&ready_list, &t->elem); // 변동 있을 수 있으므로 ordered필요 없다.
 	}
 	else {
 		// ASSERT(strcmp(t->name,"idle")!=0);
@@ -381,7 +397,7 @@ thread_yield (void) {
 	old_level = intr_disable ();
 	if (curr != idle_thread){
 		if(!thread_mlfqs){
-			list_push_back (&ready_list, &curr->elem);
+			list_push_back(&ready_list, &curr->elem);
 		}
 	}
 	if(thread_mlfqs){
@@ -399,7 +415,7 @@ thread_preemtion(void){
 	if(!thread_mlfqs){
 		if(!list_empty(&ready_list)){
 			struct thread *curr = thread_current();
-			struct list_elem *e = list_begin(&ready_list);
+			struct list_elem *e = list_front(&ready_list);
 			struct thread *first_thread = list_entry(e, struct thread, elem);
 
 			if(first_thread->priority > curr->priority){
@@ -466,7 +482,7 @@ thread_get_priority (void) {
 	// printf("우선권 가져오기\n");
 	struct thread* thisThrd = thread_current();
 	if(!thread_mlfqs){
-		return thread_get_priority2(thisThrd);
+		return thread_get_superficial_priority(thisThrd);
 	}
 	else {
 		return thread_get_base_priority(thisThrd);
@@ -474,7 +490,7 @@ thread_get_priority (void) {
 }
 
 int
-thread_get_priority2(struct thread* Thread){
+thread_get_superficial_priority(struct thread* Thread){
 	return Thread->priority;
 }
 
@@ -487,7 +503,6 @@ thread_get_base_priority(struct thread* Thread){
 void 
 thread_donate_priority(struct thread* toThread, struct thread* donor){
 	if(thread_mlfqs) return; //TIL
-
 	// printf("우선권 기부하기 -> %d\n", prioirty);
 	ASSERT(&(toThread->donor_list)!=NULL);
 	struct thread* nowThrd = toThread;
@@ -501,7 +516,6 @@ thread_donate_priority(struct thread* toThread, struct thread* donor){
 		holder->priority = nowThrd->priority; //무조건 높은애만 들어옴
 		nowThrd = holder;
 	}
-	
 	thread_yield();
 }
 
@@ -795,8 +809,8 @@ static struct thread *
 next_thread_to_run (void) {
 	if (list_empty (&ready_list)) return idle_thread; //thread_current();
 	else {
-		list_sort(&ready_list, bigger_priority, NULL);
-		return list_entry(list_pop_front (&ready_list), struct thread, elem);
+		list_sort(&ready_list, lesser_priority, NULL);
+		return list_entry(list_pop_front(&ready_list), struct thread, elem);
 	}
 }
 
@@ -843,8 +857,6 @@ next_mlfqs_thread_to_run(void) {
 	}
 }
 
-
-
 bool less_wakeup_tick(const struct list_elem *a, 
 				   const struct list_elem *b, 
 				   void *aux UNUSED){
@@ -863,6 +875,18 @@ bool bigger_priority(const struct list_elem *a,
 	struct thread *threadA = list_entry(a, struct thread, elem);
 	struct thread *threadB = list_entry(b, struct thread, elem);
 	if(threadA->priority > threadB->priority){
+		return true;
+	}else{
+		return false;
+	}
+}
+
+bool lesser_priority(const struct list_elem *a, 
+				   const struct list_elem *b, 
+				   void *aux UNUSED){
+	struct thread *threadA = list_entry(a, struct thread, elem);
+	struct thread *threadB = list_entry(b, struct thread, elem);
+	if(threadA->priority < threadB->priority){
 		return true;
 	}else{
 		return false;
@@ -990,7 +1014,11 @@ thread_launch (struct thread *th) {
 			);
 }
 
-/* Schedules a new process. At entry, interrupts must be off.
+/* 
+   실행중(running)인 쓰레드를 satus로 상태를 바꾸고, 
+   destruction큐의 쓰레드 메모리 해제하고, 
+   스케줄링한다.
+   Schedules a new process. At entry, interrupts must be off.
  * This function modify current thread's status to status and then
  * finds another thread to run and switches to it.
  * It's not safe to call printf() in the schedule(). */
@@ -1008,6 +1036,11 @@ do_schedule(int status) {
 	schedule ();
 }
 
+/*
+	다음 실행 쓰레드(next)를 결정한다.
+	현재 쓰레드가 DYING이라면 destruction 큐에 넣는다.
+	next를 launch한다. (컨텍스트 스위치)
+*/
 static void
 schedule (void) {
 	struct thread *curr = running_thread ();

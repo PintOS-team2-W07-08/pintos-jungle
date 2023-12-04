@@ -91,7 +91,7 @@ struct thread {
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int base_priority;					/* Base priority for recall */
-	int priority;
+	int priority;						/* Superficial Priority for donate */
 	int niceness;
 	fixed_point recent_cpu;
 	int64_t wakeup_tick;
@@ -123,10 +123,11 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
-struct list_elem *sleep_list_tail(void);
-struct list_elem * get_sleep_list(void); //
+struct list_elem *get_sleep_list_begin(void); //
+struct list_elem *get_sleep_list_tail(void);
 void thread_sleep(int64_t); //
-void thread_wakeup(struct thread*);//
+void set_global_wakeup_tick(int64_t);
+int64_t get_global_wakeup_tick(void);
 
 void thread_tick (void);
 void thread_print_stats (void);
@@ -153,10 +154,12 @@ bool bigger_priority(const struct list_elem *, const struct list_elem *, void *)
 bool bigger_priority_donor(const struct list_elem *, const struct list_elem *, void *);
 bool bigger_base_priority(const struct list_elem *, const struct list_elem *, void *);
 
+bool lesser_priority(const struct list_elem *, const struct list_elem *, void *);
+
 int thread_get_priority (void);
-int thread_get_priority2(struct thread*);
 void thread_set_priority (int);
 
+int thread_get_superficial_priority(struct thread*);
 int thread_get_base_priority(struct thread *);
 void thread_donate_priority(struct thread *, struct thread *);
 void thread_recall_priority(struct lock *lock);
