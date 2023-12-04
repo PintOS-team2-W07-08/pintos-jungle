@@ -320,7 +320,7 @@ thread_unblock (struct thread *t) {
 	old_level = intr_disable ();
 	ASSERT (t->status == THREAD_BLOCKED);
 	if(!thread_mlfqs) {
-		list_push_back(&ready_list, &t->elem); // 변동 있을 수 있으므로 ordered필요 없다.
+		list_push_front(&ready_list, &t->elem); // 변동 있을 수 있으므로 ordered필요 없다.
 	}
 	else {
 		// ASSERT(strcmp(t->name,"idle")!=0);
@@ -397,7 +397,7 @@ thread_yield (void) {
 	old_level = intr_disable ();
 	if (curr != idle_thread){
 		if(!thread_mlfqs){
-			list_push_back(&ready_list, &curr->elem);
+			list_push_front(&ready_list, &curr->elem);
 		}
 	}
 	if(thread_mlfqs){
@@ -536,8 +536,8 @@ thread_recall_priority(struct lock *lock){
 		}
 	}
 	if(!list_empty(list)){
-		list_sort(list, bigger_priority_donor, NULL);
-		thrd->priority = list_entry(list_front(list), struct thread, donor_elem)->priority;
+		list_sort(list, lesser_priority, NULL);
+		thrd->priority = list_entry(list_back(list), struct thread, donor_elem)->priority;
 	}else{
 		thrd->priority = thrd->base_priority;
 	}
@@ -809,8 +809,8 @@ static struct thread *
 next_thread_to_run (void) {
 	if (list_empty (&ready_list)) return idle_thread; //thread_current();
 	else {
-		list_sort(&ready_list, bigger_priority, NULL);
-		return list_entry(list_pop_front(&ready_list), struct thread, elem);
+		list_sort(&ready_list, lesser_priority, NULL);
+		return list_entry(list_pop_back(&ready_list), struct thread, elem);
 	}
 }
 
@@ -1028,7 +1028,7 @@ do_schedule(int status) {
 	ASSERT (thread_current()->status == THREAD_RUNNING);
 	while (!list_empty (&destruction_req)) {
 		struct thread *victim =
-			list_entry(list_pop_front (&destruction_req), struct thread, elem);
+			list_entry(list_pop_front(&destruction_req), struct thread, elem);
 		// free(victim->donor_list);
 		palloc_free_page(victim);
 	}
