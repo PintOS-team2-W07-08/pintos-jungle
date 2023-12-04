@@ -415,9 +415,9 @@ thread_preemtion(void){
 	if(!thread_mlfqs){
 		if(!list_empty(&ready_list)){
 			struct thread *curr = thread_current();
-			struct list_elem *e = list_front(&ready_list);
-			struct thread *first_thread = list_entry(e, struct thread, elem);
-
+			list_sort(&ready_list, bigger_priority, NULL);
+			struct list_elem *front_elem = list_front(&ready_list);
+			struct thread *first_thread = list_entry(front_elem, struct thread, elem);
 			if(first_thread->priority > curr->priority){
 				thread_yield();
 			}
@@ -809,7 +809,7 @@ static struct thread *
 next_thread_to_run (void) {
 	if (list_empty (&ready_list)) return idle_thread; //thread_current();
 	else {
-		list_sort(&ready_list, lesser_priority, NULL);
+		list_sort(&ready_list, bigger_priority, NULL);
 		return list_entry(list_pop_front(&ready_list), struct thread, elem);
 	}
 }
