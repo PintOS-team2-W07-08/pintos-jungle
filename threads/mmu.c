@@ -200,7 +200,7 @@ pml4_destroy (uint64_t *pml4) {
 }
 
 /* Loads page directory PD into the CPU's page directory base
- * register. */
+ * register.(PDBR) */
 void
 pml4_activate (uint64_t *pml4) {
 	lcr3 (vtop (pml4 ? pml4 : base_pml4));
@@ -221,7 +221,9 @@ pml4_get_page (uint64_t *pml4, const void *uaddr) {
 	return NULL;
 }
 
-/* Adds a mapping in page map level 4 PML4 from user virtual page
+/* 
+ 
+ * Adds a mapping in page map level 4 PML4 from user virtual page
  * UPAGE to the physical frame identified by kernel virtual address KPAGE.
  * UPAGE must not already be mapped. KPAGE should probably be a page obtained
  * from the user pool with palloc_get_page().
@@ -238,7 +240,7 @@ pml4_set_page (uint64_t *pml4, void *upage, void *kpage, bool rw) {
 
 	uint64_t *pte = pml4e_walk (pml4, (uint64_t) upage, 1);
 
-	if (pte)
+	if (pte) //pte에 저장된 값(물리주소 와 옵션(present, r/w, 권한 등)을 리셋.
 		*pte = vtop (kpage) | PTE_P | (rw ? PTE_W : 0) | PTE_U;
 	return pte != NULL;
 }

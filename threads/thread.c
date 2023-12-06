@@ -412,8 +412,9 @@ thread_yield (void) {
 
 void
 thread_preemtion(void){
+	
 	if(!thread_mlfqs){
-		if(!list_empty(&ready_list)){
+		if(!list_empty(&ready_list) && !intr_context()){
 			struct thread *curr = thread_current();
 			list_sort(&ready_list, bigger_priority, NULL);
 			struct list_elem *front_elem = list_front(&ready_list);
@@ -917,7 +918,9 @@ bool bigger_priority_donor(const struct list_elem *a,
 	}
 }
 
-/* Use iretq to launch the thread */
+/* 
+intr_frame 을 레지스로 move
+Use iretq to launch the thread */
 void
 do_iret (struct intr_frame *tf) {
 	__asm __volatile(
@@ -945,7 +948,10 @@ do_iret (struct intr_frame *tf) {
 			: : "g" ((uint64_t) tf) : "memory");
 }
 
-/* Switching the thread by activating the new thread's page
+/* 
+   running thread의 레지스터를 curr tf(interrupt_frame)에 저장하고,
+   새 tf 로드를 위해 do_iret() 실행
+   Switching the thread by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
 
    At this function's invocation, we just switched from thread

@@ -44,11 +44,14 @@
 #define is_kernel_vaddr(vaddr) ((uint64_t)(vaddr) >= KERN_BASE)
 
 // FIXME: add checking
-/* Returns kernel virtual address at which physical address PADDR
+/*  physical to virtual 
+ *  Returns kernel virtual address at which physical address PADDR
  *  is mapped. */
 #define ptov(paddr) ((void *) (((uint64_t) paddr) + KERN_BASE))
 
-/* Returns physical address at which kernel virtual address VADDR
+/*  virtual to physical
+ * kernel 가상주소 VADDR이 맵핑되어있는 물리주소 반환
+ * Returns physical address at which kernel virtual address VADDR
  * is mapped. */
 #define vtop(vaddr) \
 ({ \

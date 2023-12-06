@@ -103,7 +103,7 @@ struct thread {
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
-	uint64_t *pml4;                     /* Page map level 4 */
+	uint64_t *pml4;                     /* Page map level 4 mmu가 반환하는 thread의 page 주소*/
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
@@ -162,7 +162,7 @@ void thread_set_priority (int);
 int thread_get_superficial_priority(struct thread*);
 int thread_get_base_priority(struct thread *);
 void thread_donate_priority(struct thread *, struct thread *);
-void thread_recall_priority(struct lock *lock);
+void thread_recall_priority(struct lock *);
 
 void thread_calculate_priority(struct thread *thrd, void *aux);
 void thread_calculate_recent_cpu(struct thread *thrd, void *aux);
