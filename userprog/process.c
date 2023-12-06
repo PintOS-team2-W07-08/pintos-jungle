@@ -186,7 +186,6 @@ process_exec (void *f_name) {
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
-
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
@@ -350,17 +349,15 @@ load (const char *file_name, struct intr_frame *if_) {
 	int argc;
 
 	//parsing
-    char *name, *argv[ARGUMENT_LENGTH];
+    char *argv[ARGUMENT_LENGTH];
 	char *token, *save_ptr;
-	name = strtok_r (file_name, " ", &save_ptr);
-	printf("name:%s \n",name);
 	
-	token = strtok_r (NULL, " ", &save_ptr);
+	token = strtok_r (file_name, " ", &save_ptr);
 	for(i = 0; token != NULL; i++){
 		argv[i]=token;
 		token = strtok_r (NULL, " ", &save_ptr);
 	}
-	argv[i]=NULL;
+	argv[i] = NULL;
 	argc = i;
 	
 	for(i = 0; argv[i] != '\0'; i++){
@@ -373,6 +370,7 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
+	file_name = argv[0];
 	/* Open executable file. */
 	file = filesys_open (file_name);
 	if (file == NULL) {
@@ -452,10 +450,11 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
-	
-
-	/* TODO: Implement argument passing (see project2/argument_passing.html). */
-	hex_dump(if_->rsp,if_->rsp,USER_STACK-if_->rsp,true);
+	uintptr_t rsi = argument_stack(&(if_->rsp), argv, argc);
+	if_->R.rdi=argc;
+	if_->R.rsi=rsi;
+	// /* TODO: Implement argument passing (see project2/argument_passing.html). */
+	hex_dump(if_->rsp, if_->rsp, USER_STACK-if_->rsp, true);
 
 	success = true;
 
@@ -465,6 +464,39 @@ done:
 	return success;
 }
 
+uintptr_t argument_stack(uintptr_t *if_rsp, char **argv, int argc){
+	uintptr_t rsp = *if_rsp;
+	int len;
+	void *argp[argc];
+
+	//char 넣기
+	for(int i = argc-1; i>=0 ; i--){
+		len = strlen(argv[i]) + 1; // null문자 포함
+		rsp-=len;
+		argp[i] = memcpy((char *)(rsp),argv[i],len);	
+	}
+
+	int word = sizeof(char*);
+	//word-align
+	int padding = rsp % word;
+	rsp-=padding;
+	memset((char *)(rsp), 0 , padding); //word-align
+
+	//address
+	rsp-=word;
+	memset((char *)(rsp),0,word);  //argument sentinel
+	
+	for(int i = argc-1; i>=0 ; i--){
+		rsp-=word;
+		memcpy((char *)rsp,&argp[i],word);
+	}
+
+	rsp-=word;
+	memset((char *)rsp,0,word);
+
+	*if_rsp = rsp+word;
+	return rsp+word;
+}
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */
@@ -584,8 +616,9 @@ setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
 	bool success = false;
 
+	//user pool에서 0으로 초기화하여 page 할당
 	kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-	if (kpage != NULL) {
+	if (kpage != NULL) { //PGSIZE = 1<<12  = 4KB
 		success = install_page (((uint8_t *) USER_STACK) - PGSIZE, kpage, true);
 		if (success)
 			if_->rsp = USER_STACK;
