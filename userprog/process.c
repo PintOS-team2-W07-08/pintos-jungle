@@ -186,7 +186,6 @@ process_exec (void *f_name) {
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
-	
 
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
@@ -348,7 +347,26 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
+	int argc;
 
+	//parsing
+    char *name, *argv[ARGUMENT_LENGTH];
+	char *token, *save_ptr;
+	name = strtok_r (file_name, " ", &save_ptr);
+	printf("name:%s \n",name);
+	
+	token = strtok_r (NULL, " ", &save_ptr);
+	for(i = 0; token != NULL; i++){
+		argv[i]=token;
+		token = strtok_r (NULL, " ", &save_ptr);
+	}
+	argv[i]=NULL;
+	argc = i;
+	
+	for(i = 0; argv[i] != '\0'; i++){
+		printf("argv[%d] : %s\n",i,argv[i]);
+	}
+    
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -434,9 +452,10 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
+	
+
+	/* TODO: Implement argument passing (see project2/argument_passing.html). */
 	hex_dump(if_->rsp,if_->rsp,USER_STACK-if_->rsp,true);
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 
 	success = true;
 

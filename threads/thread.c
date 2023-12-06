@@ -919,7 +919,7 @@ bool bigger_priority_donor(const struct list_elem *a,
 }
 
 /* 
-intr_frame 을 레지스로 move
+intr_frame 을 레지스터로 move
 Use iretq to launch the thread */
 void
 do_iret (struct intr_frame *tf) {

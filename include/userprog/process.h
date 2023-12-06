@@ -1,5 +1,6 @@
 #ifndef USERPROG_PROCESS_H
 #define USERPROG_PROCESS_H
+#define ARGUMENT_LENGTH 64
 
 #include "threads/thread.h"
 
