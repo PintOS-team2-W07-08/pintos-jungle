@@ -158,14 +158,21 @@ error:
 	thread_exit ();
 }
 
-/* Switch the current execution context to the f_name.
+/* 
+ * 현재 실행을 f_name의 프로그램으로 전환함.
+ * _if를 레지스터로 옮김
+ * Switch the current execution context to the f_name.
  * Returns -1 on fail. */
 int
 process_exec (void *f_name) {
+	printf("--------argv: %s------\n", f_name);
 	char *file_name = f_name;
 	bool success;
 
-	/* We cannot use the intr_frame in the thread structure.
+	/* 
+	 * current thread는 실행환경을 저장하기 때문에, 
+	 * 초기화된 intr_frame이 필요하다.
+	 * We cannot use the intr_frame in the thread structure.
 	 * This is because when current thread rescheduled,
 	 * it stores the execution information to the member. */
 	struct intr_frame _if;
@@ -179,10 +186,13 @@ process_exec (void *f_name) {
 	/* And then load the binary */
 	success = load (file_name, &_if);
 
+
 	/* If load failed, quit. */
 	palloc_free_page (file_name);
 	if (!success)
 		return -1;
+
+	//hex_dump
 
 	/* Start switched process. */
 	do_iret (&_if);
@@ -201,6 +211,9 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
+	while(1){
+		// printf("waiting\n");
+	}
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
@@ -219,7 +232,11 @@ process_exit (void) {
 	process_cleanup ();
 }
 
-/* Free the current process's resources. */
+/* 
+* curr->pml4를 NULL로 덮어씌움
+* plm4_activate(NULL) 을 실행함
+* 기존 pml4의 page를 free 함(plm4_destroy)	
+* Free the current process's resources. */
 static void
 process_cleanup (void) {
 	struct thread *curr = thread_current ();
@@ -322,13 +339,34 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
+	printf("--------load------\n");
+
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
 	struct file *file = NULL;
 	off_t file_ofs;
 	bool success = false;
 	int i;
+	int argc;
 
+	//parsing
+    char *name, *argv[ARGUMENT_LENGTH];
+	char *token, *save_ptr;
+	name = strtok_r (file_name, " ", &save_ptr);
+	printf("name:%s \n",name);
+	
+	token = strtok_r (NULL, " ", &save_ptr);
+	for(i = 0; token != NULL; i++){
+		argv[i]=token;
+		token = strtok_r (NULL, " ", &save_ptr);
+	}
+	argv[i]=NULL;
+	argc = i;
+	
+	for(i = 0; argv[i] != '\0'; i++){
+		printf("argv[%d] : %s\n",i,argv[i]);
+	}
+    
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
 	if (t->pml4 == NULL)
@@ -414,8 +452,10 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
-	/* TODO: Your code goes here.
-	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	
+
+	/* TODO: Implement argument passing (see project2/argument_passing.html). */
+	hex_dump(if_->rsp,if_->rsp,USER_STACK-if_->rsp,true);
 
 	success = true;
 
@@ -478,7 +518,9 @@ validate_segment (const struct Phdr *phdr, struct file *file) {
 /* load() helpers. */
 static bool install_page (void *upage, void *kpage, bool writable);
 
-/* Loads a segment starting at offset OFS in FILE at address
+/* 
+   upage 에서 file의 ofs(OFFSET) 으로 시작하는 세그먼트를 읽어옴.
+ * Loads a segment starting at offset OFS in FILE at address
  * UPAGE.  In total, READ_BYTES + ZERO_BYTES bytes of virtual
  * memory are initialized, as follows:
  *
@@ -534,7 +576,9 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 	return true;
 }
 
-/* Create a minimal stack by mapping a zeroed page at the USER_STACK */
+/* 
+user stack에 최소 스택을 만들고, if_rsp에 그 주소를 담음
+Create a minimal stack by mapping a zeroed page at the USER_STACK */
 static bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;
@@ -551,7 +595,8 @@ setup_stack (struct intr_frame *if_) {
 	return success;
 }
 
-/* Adds a mapping from user virtual address UPAGE to kernel
+/* 페이지 테이블에 UPAGE에서 KPAGE로의 맵핑을 추가한다. 
+ * Adds a mapping from user virtual address UPAGE to kernel
  * virtual address KPAGE to the page table.
  * If WRITABLE is true, the user process may modify the page;
  * otherwise, it is read-only.
@@ -566,8 +611,8 @@ install_page (void *upage, void *kpage, bool writable) {
 
 	/* Verify that there's not already a page at that virtual
 	 * address, then map our page there. */
-	return (pml4_get_page (t->pml4, upage) == NULL
-			&& pml4_set_page (t->pml4, upage, kpage, writable));
+	return (pml4_get_page (t->pml4, upage) == NULL  //page mapping 안 돼있는지 확인
+			&& pml4_set_page (t->pml4, upage, kpage, writable)); //page mapping
 }
 #else
 /* From here, codes will be used after project 3.

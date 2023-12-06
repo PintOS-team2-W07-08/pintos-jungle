@@ -1,7 +1,9 @@
 #ifndef INSTRINSIC_H
 #include "threads/mmu.h"
 
-/* Store the physical address of the page directory into CR3
+/* 
+   페이지 디렉토리 베이스 레지스터에, 페이지 디렉토리 주소를 저장함.
+   Store the physical address of the page directory into CR3
    aka PDBR (page directory base register).  This activates our
    new page tables immediately.  See [IA32-v2a] "MOV--Move
    to/from Control Registers" and [IA32-v3a] 3.7.5 "Base Address

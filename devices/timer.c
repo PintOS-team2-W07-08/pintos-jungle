@@ -2,7 +2,11 @@
 #include <debug.h>
 #include <inttypes.h>
 #include <round.h>
+#include <string.h>
 #include <stdio.h>
+
+#include <list.h>
+
 #include "threads/interrupt.h"
 #include "threads/io.h"
 #include "threads/synch.h"
@@ -93,8 +97,8 @@ timer_sleep (int64_t ticks) {
 	int64_t start = timer_ticks ();
 
 	ASSERT (intr_get_level () == INTR_ON);
-	while (timer_elapsed (start) < ticks)
-		thread_yield ();
+	if(timer_elapsed (start) < ticks)
+		thread_sleep(start+ticks);
 }
 
 /* Suspends execution for approximately MS milliseconds. */
@@ -120,12 +124,50 @@ void
 timer_print_stats (void) {
 	printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
-
+
 /* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED) {
 	ticks++;
 	thread_tick ();
+	//최소틱
+	
+	if(thread_mlfqs){
+		//recent cpu 증가
+		if(strcmp(thread_current()->name,"idle")!=0){
+			thread_current()->recent_cpu = fp_add_int(thread_current()->recent_cpu,1);
+		}
+
+		//1초 (100틱) 마다
+		if (timer_ticks() % TIMER_FREQ == 0 ){
+			thread_set_load_avg();
+			thread_calculate_recent_cpu_all();
+		}
+		//4틱 마다
+		if (timer_ticks() % 4 == 0){
+			thread_calculate_priority_all();
+		}
+	}
+
+	if(get_global_wakeup_tick()>ticks){
+		return;
+	}
+	struct list_elem *elem = get_sleep_list_begin();
+	struct list_elem *next_elem;
+	
+	while (elem != get_sleep_list_tail()){
+		next_elem = list_next(elem);
+
+		struct thread *thrdp = list_entry(elem, struct thread, elem);
+		if(thrdp->wakeup_tick <= ticks){
+			list_remove(elem);
+			thread_unblock(thrdp);
+		}else{
+			set_global_wakeup_tick(thrdp->wakeup_tick);
+			break; //작으면 더이상 진행하지 않음.
+		}
+		elem = next_elem;
+	}
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer

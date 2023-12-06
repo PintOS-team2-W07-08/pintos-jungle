@@ -5,10 +5,10 @@
 #include <list.h>
 #include <stdint.h>
 #include "threads/interrupt.h"
+#include "threads/fixed_point.h"
 #ifdef VM
 #include "vm/vm.h"
 #endif
-
 
 /* States in a thread's life cycle. */
 enum thread_status {
@@ -90,14 +90,20 @@ struct thread {
 	tid_t tid;                          /* Thread identifier. */
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
-	int priority;                       /* Priority. */
-
+	int base_priority;					/* Base priority for recall */
+	int priority;						/* Superficial Priority for donate */
+	int niceness;
+	fixed_point recent_cpu;
+	int64_t wakeup_tick;
+	struct list donor_list;
+	struct list_elem donor_elem;
+	struct lock *waitonlock;
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
-	uint64_t *pml4;                     /* Page map level 4 */
+	uint64_t *pml4;                     /* Page map level 4 mmu가 반환하는 thread의 page 주소*/
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
@@ -117,6 +123,12 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
+struct list_elem *get_sleep_list_begin(void); //
+struct list_elem *get_sleep_list_tail(void);
+void thread_sleep(int64_t); //
+void set_global_wakeup_tick(int64_t);
+int64_t get_global_wakeup_tick(void);
+
 void thread_tick (void);
 void thread_print_stats (void);
 
@@ -132,15 +144,48 @@ const char *thread_name (void);
 
 void thread_exit (void) NO_RETURN;
 void thread_yield (void);
+void thread_preemtion(void);
+
+struct list_elem *mlfq_begin(void);
+int highest_priority(void);
+
+bool less_wakeup_tick(const struct list_elem *, const struct list_elem *, void *);
+bool bigger_priority(const struct list_elem *, const struct list_elem *, void *);
+bool bigger_priority_donor(const struct list_elem *, const struct list_elem *, void *);
+bool bigger_base_priority(const struct list_elem *, const struct list_elem *, void *);
+
+bool lesser_priority(const struct list_elem *, const struct list_elem *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+
+int thread_get_superficial_priority(struct thread*);
+int thread_get_base_priority(struct thread *);
+void thread_donate_priority(struct thread *, struct thread *);
+void thread_recall_priority(struct lock *);
+
+void thread_calculate_priority(struct thread *thrd, void *aux);
+void thread_calculate_recent_cpu(struct thread *thrd, void *aux);
+
+void thread_calculate_priority_all (void);
+void thread_calculate_recent_cpu_all(void);
 
 int thread_get_nice (void);
 void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
+void thread_set_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
+
+// static void thread_launch (struct thread *th);
+
+void list_thread_dump(struct list *);
+
+/*Executing function for each element in list*/
+typedef void list_exec_func (struct thread *thrd, 
+                              void *aux);
+/*Excute function on list*/
+void execute_func_in_list(struct list* list, list_exec_func func, void *aux);
 
 #endif /* threads/thread.h */
