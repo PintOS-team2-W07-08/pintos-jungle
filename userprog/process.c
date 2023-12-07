@@ -165,7 +165,6 @@ error:
  * Returns -1 on fail. */
 int
 process_exec (void *f_name) {
-	printf("--------argv: %s------\n", f_name);
 	char *file_name = f_name;
 	bool success;
 
@@ -338,7 +337,6 @@ static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
  * Returns true if successful, false otherwise. */
 static bool
 load (const char *file_name, struct intr_frame *if_) {
-	printf("--------load------\n");
 
 	struct thread *t = thread_current ();
 	struct ELF ehdr;
@@ -360,9 +358,9 @@ load (const char *file_name, struct intr_frame *if_) {
 	argv[i] = NULL;
 	argc = i;
 	
-	for(i = 0; argv[i] != '\0'; i++){
-		printf("argv[%d] : %s\n",i,argv[i]);
-	}
+	// for(i = 0; argv[i] != '\0'; i++){
+	// 	printf("argv[%d] : %s\n",i,argv[i]);
+	// }
     
 	/* Allocate and activate page directory. */
 	t->pml4 = pml4_create ();
@@ -453,8 +451,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	uintptr_t rsi = argument_stack(&(if_->rsp), argv, argc);
 	if_->R.rdi=argc;
 	if_->R.rsi=rsi;
-	// /* TODO: Implement argument passing (see project2/argument_passing.html). */
-	hex_dump(if_->rsp, if_->rsp, USER_STACK-if_->rsp, true);
+	// hex_dump(if_->rsp, if_->rsp, USER_STACK-if_->rsp, true);
 
 	success = true;
 
