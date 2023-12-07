@@ -124,9 +124,9 @@ void thread_init (void);
 void thread_start (void);
 
 struct list_elem *sleep_list_tail(void);
-struct list_elem * get_sleep_list(void); //
-void thread_sleep(int64_t); //
-void thread_wakeup(struct thread*);//
+struct list_elem * get_sleep_list(void);
+void thread_sleep(int64_t); 
+void thread_wakeup(struct thread*);
 
 void thread_tick (void);
 void thread_print_stats (void);
@@ -162,7 +162,7 @@ void thread_donate_priority(struct thread *, struct thread *);
 void thread_recall_priority(struct lock *lock);
 
 void thread_calculate_priority(struct thread *thrd, void *aux);
-void thread_calculate_recent_cpu(struct thread *thrd, void *aux);
+void thread_calculate_recent_cpu (struct thread* thrd, void *aux);      
 
 void thread_calculate_priority_all (void);
 void thread_calculate_recent_cpu_all(void);
@@ -175,14 +175,7 @@ void thread_set_load_avg (void);
 
 void do_iret (struct intr_frame *tf);
 
-// static void thread_launch (struct thread *th);
-
 void list_thread_dump(struct list *);
-
-/*Executing function for each element in list*/
-typedef void list_exec_func (struct thread *thrd, 
-                              void *aux);
-/*Excute function on list*/
-void execute_func_in_list(struct list* list, list_exec_func func, void *aux);
+typedef void list_exec_func (struct thread *thrd, void *aux);
 
 #endif /* threads/thread.h */

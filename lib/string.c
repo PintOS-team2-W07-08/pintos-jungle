@@ -228,12 +228,16 @@ strtok_r (char *s, const char *delimiters, char **save_ptr) {
 		s = *save_ptr;
 	ASSERT (s != NULL);
 
-	/* Skip any DELIMITERS at our current position. */
+	/* Skip any DELIMITERS at our current position.
+	* 현재 위치에서 delimiters를 건너뛰기 위한 반복문 
+	* strchr(str, 'M')은 str에서 M을 찾고, 해당 문자가 존재하는 포인터를 반환, 아니면 NULL
+	*/
 	while (strchr (delimiters, *s) != NULL) {
 		/* strchr() will always return nonnull if we're searching
 		   for a null byte, because every string contains a null
 		   byte (at the end). */
-		if (*s == '\0') {
+		if (*s == '\0') 	// delimiters를 찾지 못하고, 문자열 끝에 도달했다면
+		{
 			*save_ptr = s;
 			return NULL;
 		}
@@ -241,10 +245,16 @@ strtok_r (char *s, const char *delimiters, char **save_ptr) {
 		s++;
 	}
 
-	/* Skip any non-DELIMITERS up to the end of the string. */
+	/* Skip any non-DELIMITERS up to the end of the string.
+	* 현재 위치에서 non-delimiters를 건너뛰고 토큰을 구한다.
+	*/
 	token = s;
 	while (strchr (delimiters, *s) == NULL)
 		s++;
+	
+	/* 만약 문자열 끝이 아니라면, 토큰을 NULL 문자로 끊어주고 save_ptr을 설정한다. 
+	* 만약 문자열 끝에 도달했다면, sve_ptr을 해당 위치에 설정
+	*/
 	if (*s != '\0') {
 		*s = '\0';
 		*save_ptr = s + 1;

@@ -204,6 +204,7 @@ process_wait (tid_t child_tid UNUSED) {
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
+	while(1) {}		// parameter passing  
 	return -1;
 }
 
@@ -335,6 +336,24 @@ load (const char *file_name, struct intr_frame *if_) {
 		goto done;
 	process_activate (thread_current ());
 
+	// parameter parsing
+	// 파싱해서 함수의 이름만 전달하기
+	char *save_ptr;
+	char *token;
+	char *token_arr[128];
+	int argc;
+	argc = 0;
+	token = strtok_r(file_name, " ", &save_ptr);
+	// printf("0번 인덱스의 token값:%s\n", token);
+	// 공백을 기준으로 문자열로 나눈 후, token_arr에 저장
+	for(int i = 0; token != NULL; i++) {
+		token_arr[i] = token;	
+		//다음 토큰을 갱신한다.
+		token = strtok_r(NULL, " ", &save_ptr);
+		argc += 1;
+	}
+	token_arr[i] = NULL;
+	
 	/* Open executable file. */
 	file = filesys_open (file_name);
 	if (file == NULL) {
@@ -416,7 +435,9 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	/* TODO: Your code goes here.
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
+	stack_data(token_arr, argc, if_);
 
+	hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
 	success = true;
 
 done:
@@ -425,6 +446,36 @@ done:
 	return success;
 }
 
+void
+stack_data(char *token_arr[], int argc, struct intr_frame *if_) {
+	int padding;
+	uintptr_t address[argc];
+	int i;
+	// 명령어 넣기
+	for(i = argc - 1; i > -1; i--) {
+		if_->rsp -= (strlen(token_arr[i]) + 1);
+		address[i] = memcpy(if_->rsp, token_arr[i], strlen(token_arr[i]) + 1);
+	}
+	// padding값 넣기
+	padding = if_-> rsp % 8;
+	if_->rsp -= padding;
+	memset(if_->rsp, token_arr[i], padding);
+	// sentinel
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8);
+	// 저장한 주소 반환	
+	for(i = argc - 1; i >= 0; i--) {
+		if_->rsp -= 8;
+		memcpy(if_->rsp, &address[i], 8);		// TIL
+	}
+	// fake address
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8);
+	if_-> rsp += 8;
+
+	if_->R.rdi = argc;
+	if_->R.rsi = if_->rsp; 
+}
 
 /* Checks whether PHDR describes a valid, loadable segment in
  * FILE and returns true if so, false otherwise. */
