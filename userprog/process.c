@@ -347,21 +347,20 @@ load (const char *file_name, struct intr_frame *if_) {
 	off_t file_ofs;
 	bool success = false;
 	int i;
-	int argc;
+	int argc ;
 
 	//parsing
     char *name, *argv[ARGUMENT_LENGTH];
 	char *token, *save_ptr;
-	name = strtok_r (file_name, " ", &save_ptr);
-	printf("name:%s \n",name);
 	
-	token = strtok_r (NULL, " ", &save_ptr);
+	token = strtok_r (file_name, " ", &save_ptr);
 	for(i = 0; token != NULL; i++){
 		argv[i]=token;
 		token = strtok_r (NULL, " ", &save_ptr);
 	}
 	argv[i]=NULL;
 	argc = i;
+	// printf ("argc : %d \n" , argc);
 	
 	for(i = 0; argv[i] != '\0'; i++){
 		printf("argv[%d] : %s\n",i,argv[i]);
@@ -452,7 +451,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	/* Start address. */
 	if_->rip = ehdr.e_entry;
 
-	
+	argument_stack (argv ,argc, if_);
 
 	/* TODO: Implement argument passing (see project2/argument_passing.html). */
 	hex_dump(if_->rsp,if_->rsp,USER_STACK-if_->rsp,true);
@@ -463,6 +462,41 @@ done:
 	/* We arrive here whether the load is successful or not. */
 	file_close (file);
 	return success;
+}
+
+void argument_stack (char* argv[] ,int argc, struct intr_frame *if_) {
+	int i;
+	int total_length;
+	int padding;
+	total_length = 0;
+	uintptr_t address[argc];
+	
+	// 명령어 넣기
+	for (i = argc -1 ; i > -1; i --){
+		if_->rsp -= (strlen(argv[i]) + 1);	
+		address[i] = memcpy(if_-> rsp, argv[i], strlen(argv[i]) + 1);
+	}
+	// paddng값 넣기
+	padding = if_->rsp % 8;
+	if_->rsp -= padding;
+	memset(if_->rsp, 0, padding);
+	// sentinel
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8); 
+	// 주소 값 빼오기ß
+	for(i = argc - 1 ; i > -1; i--)
+	{
+		if_->rsp -= 8;
+		memcpy(if_->rsp, &address[i], 8);
+		//TIL
+	}
+	// fake address
+	if_->rsp -= 8;
+	memset(if_->rsp, 0, 8);
+	if_->rsp += 8;
+
+	if_->R.rdi = argc;
+	if_->R.rsi = if_->rsp;
 }
 
 
