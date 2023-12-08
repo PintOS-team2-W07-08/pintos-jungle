@@ -88,6 +88,7 @@ typedef int tid_t;
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
+	struct list_elem *parent_elem;
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int base_priority;					/* Base priority for recall */
@@ -100,6 +101,9 @@ struct thread {
 	struct lock *waitonlock;
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
+
+	struct list child_sema_list;
+	int exit_status;
 
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */

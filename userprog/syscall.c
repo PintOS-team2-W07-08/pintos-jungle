@@ -15,7 +15,7 @@ void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
 static void _halt (struct intr_frame *);
-static void _exit (struct intr_frame *);
+static void _exit_ (struct intr_frame *);
 static void _fork (struct intr_frame *);
 static void _exec (struct intr_frame *);
 static void _wait (struct intr_frame *);
@@ -59,12 +59,12 @@ syscall_init (void) {
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f) {
-	printf ("system call! #:%d\n", f->R.rax);
-	printf("thread name: %s\n",thread_current()->name);
+	// printf ("system call! #:%d\n", (int)f->R.rax);
+	// printf("thread name: %s\n",thread_current()->name);
 
-	switch(f->R.rax){
-		case SYS_HALT :  	_halt(f); 		break;
-		case SYS_EXIT :  	_exit(f); 		break;  
+	switch((int)f->R.rax){
+		case SYS_HALT :  	_halt (f); 		break;
+		case SYS_EXIT :  	_exit_ (f); 	break;  
 		case SYS_FORK :  	_fork (f); 		break;  
 		case SYS_EXEC : 	_exec (f); 		break;  
 		case SYS_WAIT :  	_wait (f); 		break;  
@@ -92,14 +92,15 @@ _halt (struct intr_frame *f UNUSED) {
 }
 
 static void
-_exit (struct intr_frame *f) {
+_exit_ (struct intr_frame *f) {
 	int status = f->R.rdi;
-	thread_exit (); 
+	thread_current() -> exit_status = status;
+	thread_exit ();
 }
 
 static void
 _fork (struct intr_frame *f){
-	const char *thread_name = f->R.rdi;
+	const char *thread_name = (char *)f->R.rdi;
 
 	pid_t pid;
 	f->R.rax = pid;
@@ -107,7 +108,7 @@ _fork (struct intr_frame *f){
 
 static void
 _exec (struct intr_frame *f) {
-	const char *file = f->R.rdi;
+	const char *file = (char *)f->R.rdi;
 
 	int exit_status;
 	f->R.rax = exit_status;
@@ -123,7 +124,7 @@ _wait (struct intr_frame *f) {
 
 static void
 _create (struct intr_frame *f) {
-	const char *file = f->R.rdi;
+	const char *file = (char *)f->R.rdi;
 	unsigned initial_size = f->R.rsi;
 
 
@@ -133,7 +134,7 @@ _create (struct intr_frame *f) {
 
 static void
 _remove (struct intr_frame *f) {
-	const char *file = f->R.rdi;
+	const char *file = (char *)f->R.rdi;
 	
 
 	bool success;
@@ -142,7 +143,7 @@ _remove (struct intr_frame *f) {
 
 static void
 _open (struct intr_frame *f) {
-	const char *file = f->R.rdi;
+	const char *file = (char *)f->R.rdi;
 	
 	int fd ;
 	f->R.rax = fd;
@@ -159,7 +160,7 @@ _filesize (struct intr_frame *f) {
 static void
 _read (struct intr_frame *f) {
 	int fd = f->R.rdi;
-	void *buffer = f->R.rsi;
+	void *buffer = (void *)f->R.rsi;
 	unsigned size = f->R.rdx;
 	
 	
@@ -170,10 +171,10 @@ _read (struct intr_frame *f) {
 static void
 _write (struct intr_frame *f) {
 	int fd = f->R.rdi;
-	const void *buffer = &(f->R.rsi);
+	const void *buffer = (void *)f->R.rsi; //&아닌 이유?
 	unsigned size = f->R.rdx;
 
-
+	printf("%s",(char *)buffer);
 
 	int w_bytes;
 	f->R.rax = w_bytes;

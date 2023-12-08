@@ -259,6 +259,13 @@ thread_create (const char *name, int priority,
 	/* Initialize thread. */
 	init_thread (t, name, priority);
 
+	//상속
+	struct thread* parent_thread = thread_current();
+	if(is_thread(parent_thread)){
+		t->parent_elem = &parent_thread->elem;
+		// printf("parent_elem: %s\n", parent_thread->name);
+	}
+
 	tid = t->tid = allocate_tid ();
 
 	/* Call the kernel_thread if it scheduled.
@@ -373,7 +380,6 @@ thread_tid (void) {
 void
 thread_exit (void) {
 	ASSERT (!intr_context ());
-
 #ifdef USERPROG
 	process_exit ();
 #endif
@@ -779,14 +785,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 
+	struct thread *parent_thread = running_thread();
 	if(!thread_mlfqs) {
 		t->base_priority = priority;
 		t->priority = priority;
 		list_init(&(t->donor_list));
 	}
 	else {
-		struct thread *parent_thread = running_thread();
-		if(is_thread(parent_thread)){
+		if(is_thread(parent_thread)){ //이거 부모 아님
 			t->niceness = parent_thread->niceness;
 			t->recent_cpu = parent_thread->recent_cpu;
 		}else{
@@ -797,6 +803,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 		t->priority = PRI_MAX + 1;
 	} 
 
+	list_init(&t->child_sema_list);
+	
 	t->magic = THREAD_MAGIC;
 	return;
 }

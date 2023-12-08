@@ -17,6 +17,9 @@
 #include "threads/thread.h"
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
+
+#include "threads/synch.h"
+
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -197,6 +200,11 @@ process_exec (void *f_name) {
 	NOT_REACHED ();
 }
 
+struct semaphore_tid_elem {
+	tid_t tid;
+	struct list_elem elem;              /* List element. */
+	struct semaphore semaphore;         /* This semaphore. */
+};
 
 /* Waits for thread TID to die and returns its exit status.  If
  * it was terminated by the kernel (i.e. killed due to an
@@ -208,13 +216,21 @@ process_exec (void *f_name) {
  * This function will be implemented in problem 2-2.  For now, it
  * does nothing. */
 int
-process_wait (tid_t child_tid UNUSED) {
-	while(1){
-		// printf("waiting\n");
-	}
-	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
-	 * XXX:       to add infinite loop here before
-	 * XXX:       implementing the process_wait. */
+process_wait (tid_t child_tid) {
+
+	struct thread *curr = thread_current ();
+	// char *name = curr->name;
+	// int status = curr->tf.R.rax;
+	// printf("preparing '%s' status: %d\n",name,status); //printf?
+
+	struct semaphore_tid_elem child_sema;
+	child_sema.tid = child_tid;
+
+	list_push_back(&curr->child_sema_list,&child_sema.elem);
+	sema_init(&child_sema.semaphore, 0);
+	sema_down(&child_sema.semaphore);
+	list_remove(&child_sema.elem);
+
 	return -1;
 }
 
@@ -222,10 +238,41 @@ process_wait (tid_t child_tid UNUSED) {
 void
 process_exit (void) {
 	struct thread *curr = thread_current ();
-	/* TODO: Your code goes here.
-	 * TODO: Implement process termination message (see
-	 * TODO: project2/process_termination.html).
+	char *name = curr->name;
+	int status = curr->exit_status;
+
+	struct semaphore_tid_elem *child_sema;
+	struct semaphore *sema;
+
+	// printf("preparing %s: exit(%d)\n",name,status); //printf?
+
+	struct list_elem *parent_elem = curr->parent_elem;
+	if(parent_elem!=NULL){
+		struct thread *parent_thrd = list_entry(parent_elem, struct thread, elem);
+		struct list *sema_list = &parent_thrd->child_sema_list;
+		
+		//tid로 ready_list에서 찾는 게 더 효율적일지?
+		struct list_elem *elem = list_begin(sema_list);
+		struct list_elem *next_elem;
+
+		// printf("current: %s tid:%d\n", curr->name, curr->tid);
+		// printf("parent: %s tid:%d\n", parent_thrd->name, parent_thrd->tid);
+		while(elem!=list_tail(sema_list)){
+			next_elem = list_next(elem);
+			child_sema=list_entry(elem, struct semaphore_tid_elem, elem);
+			if(child_sema->tid==curr->tid){
+				sema = &child_sema->semaphore;
+				sema_up(sema);
+				// printf("tid: %d sema up\n",curr->tid);
+				break;
+			}
+
+			elem = next_elem;
+		}
+	}
+	/*
 	 * TODO: We recommend you to implement process resource cleanup here. */
+	printf("%s: exit(%d)\n",name,status); //printf?
 
 	process_cleanup ();
 }
@@ -451,6 +498,11 @@ load (const char *file_name, struct intr_frame *if_) {
 	uintptr_t rsi = argument_stack(&(if_->rsp), argv, argc);
 	if_->R.rdi=argc;
 	if_->R.rsi=rsi;
+
+	// char *str;
+	// str = *(char **)(void *)rsi;
+	// printf("stack rdi: %d rsi: %s\n",(void *)argc,str);
+
 	// hex_dump(if_->rsp, if_->rsp, USER_STACK-if_->rsp, true);
 
 	success = true;
@@ -492,7 +544,7 @@ uintptr_t argument_stack(uintptr_t *if_rsp, char **argv, int argc){
 	memset((char *)rsp,0,word);
 
 	*if_rsp = rsp+word;
-	return rsp+word;
+	return *if_rsp;
 }
 
 /* Checks whether PHDR describes a valid, loadable segment in
