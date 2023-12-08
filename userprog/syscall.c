@@ -11,6 +11,23 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
+void _halt (void);
+void _exit (struct intr_frame *f);
+int _write (struct intr_frame *f);
+// pid_t _fork (const char *thread_name);
+// int _exec (const char *file);
+// int _wait (pid_t);
+// bool _create (const char *file, unsigned initial_size);
+// bool _remove (const char *file);
+// int _open (const char *file);
+// int _filesize (int fd);
+// int _read (int fd, void *buffer, unsigned length);
+// void _seek (int fd, unsigned position);
+// unsigned _tell (int fd);
+// void _close (int fd);
+
+// int _dup2(int oldfd, int newfd);
+
 /* System call.
  *
  * Previously system call services was handled by the interrupt handler
@@ -40,7 +57,75 @@ syscall_init (void) {
 /* The main system call interface */
 void
 syscall_handler (struct intr_frame *f UNUSED) {
+	// printf("시스템 호출 번호: %d\n", f->R.rax);
+	// printf("rdi에 저장된 값: %d\n", f->R.rdi);
+	// printf("rsi에 저장된 값: %s\n", f->R.rsi);
+	// printf("rdx에 저장된 값: %d\n", f->R.rdx);
+	// printf("r10에 저장된 값: %d\n", f->R.r10);
+	// printf("r8에 저장된 값: %d\n", f->R.r8);
+	// printf("r9에 저장된 값: %d\n", f->R.r9);
 	// TODO: Your implementation goes here.
-	printf ("system call!\n");
-	thread_exit ();
+	// Implement system call
+	switch(f->R.rax)
+	{
+		case SYS_HALT:	_halt();	break;
+		case SYS_EXIT:	_exit(f);	break;
+		// case SYS_FORK:	_fork(f);	break;
+		// case SYS_EXEC:	_exec(f);	break;
+		// case SYS_WAIT:	_wait(f);	break;
+		// case SYS_CREATE:	_create(f);	break;
+		// case SYS_REMOVE:	_remove(f);	break;
+		// case SYS_OPEN:	_open(f);	break;
+		// case SYS_FILESIZE:	_filesize(f);	break;
+		// case SYS_READ:	_read(f);	break;
+		case SYS_WRITE:	_write(f);	break;
+		// case SYS_SEEK:	_seek(f);	break;
+		// case SYS_TELL:	_tell(f);	break;
+		// case SYS_CLOSE:	_close(f);	break;
+		// case SYS_DUP2:	_dup2();	break;
+		default:
+			break;
+	}
+	// printf ("system call!\n");
+	// thread_exit ();
 }
+
+// Implement system call
+void 
+_halt (void) {
+	power_off();                                               
+}
+
+void
+_exit (struct intr_frame *f) {
+	// 현재 사용자 프로그램 종료 + status 커널로 반환
+	thread_current()->tf.exit_status = f->R.rdi;
+	thread_exit();
+	// TODO: 프로세스 부모가 wait인 경우, 부모는 이 status를 반환
+}
+
+// bool
+// _create (struct intr_frame *f) {
+// 	// ASSERT 잘못된 주소의 접근 막기 (NULL값이거나 PHYS_BASE 위의 주소이다)
+// 	if(file == NULL || &(file) > LOADER_PHYS_BASE) {
+// 		return false;
+// 	}
+// 	// initial_size 바이트 크기의 file 이라는 새 파일 만듦
+// 	return filesys_create(file, initial_size);
+// 	// 주의: 새 파일 만든다해서 파일 열리지는 않음. 열려면, open() 필요
+// }
+//  /* 주소 유효성 검사 */
+// void
+// check_address( ) {
+// 	// NULL 포인터인지는 알아서 걸러줌
+// 	// PHYS_BASE 아래의 주소인지 && 페이지 할당이 되었는지(함수로 구현되어 있음.)
+// 	if(file == NULL || &(file) > LOADER_PHYS_BASE) {
+// 		thread_exit();
+// 	}
+// }
+
+int _write(struct intr_frame *f) {
+	printf("%s", f->R.rsi);
+	return 0;
+}
+

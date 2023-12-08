@@ -201,11 +201,12 @@ process_exec (void *f_name) {
  * does nothing. */
 int
 process_wait (tid_t child_tid UNUSED) {
+	int cnt = 2000000000;
+	while(cnt--);
 	/* XXX: Hint) The pintos exit if process_wait (initd), we recommend you
 	 * XXX:       to add infinite loop here before
 	 * XXX:       implementing the process_wait. */
-	while(1) {}		// parameter passing  
-	return -1;
+	return -1;			//Q
 }
 
 /* Exit the process. This function is called by thread_exit (). */
@@ -216,7 +217,7 @@ process_exit (void) {
 	 * TODO: Implement process termination message (see
 	 * TODO: project2/process_termination.html).
 	 * TODO: We recommend you to implement process resource cleanup here. */
-
+	printf("%s: exit(%d)\n",curr->name, curr->tf.exit_status);
 	process_cleanup ();
 }
 
@@ -337,18 +338,15 @@ load (const char *file_name, struct intr_frame *if_) {
 	process_activate (thread_current ());
 
 	// parameter parsing
-	// 파싱해서 함수의 이름만 전달하기
 	char *save_ptr;
 	char *token;
 	char *token_arr[128];
 	int argc;
 	argc = 0;
 	token = strtok_r(file_name, " ", &save_ptr);
-	// printf("0번 인덱스의 token값:%s\n", token);
 	// 공백을 기준으로 문자열로 나눈 후, token_arr에 저장
 	for(int i = 0; token != NULL; i++) {
 		token_arr[i] = token;	
-		//다음 토큰을 갱신한다.
 		token = strtok_r(NULL, " ", &save_ptr);
 		argc += 1;
 	}
@@ -437,7 +435,7 @@ load (const char *file_name, struct intr_frame *if_) {
 	 * TODO: Implement argument passing (see project2/argument_passing.html). */
 	stack_data(token_arr, argc, if_);
 
-	hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
+	// hex_dump(if_->rsp, if_->rsp, USER_STACK - if_->rsp, true);
 	success = true;
 
 done:

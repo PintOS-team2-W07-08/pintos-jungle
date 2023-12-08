@@ -61,6 +61,8 @@ struct intr_frame {
 	uint16_t ss;
 	uint16_t __pad7;
 	uint32_t __pad8;
+
+	int exit_status;		//Q
 } __attribute__((packed));
 
 typedef void intr_handler_func (struct intr_frame *);
