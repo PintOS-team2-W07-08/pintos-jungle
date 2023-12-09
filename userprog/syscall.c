@@ -100,7 +100,7 @@ syscall_handler (struct intr_frame *f) {
 	첫번째 방법 - 유효성 확인 후 포인터 해제
 		thread/mmu.c , vaddr.h 함수 참고
 */
-static void check_valid_pointer(void * ptr){
+static void check_valid_pointer(void *ptr){
 	struct thread *curr = thread_current();
 	uintptr_t ptr_addr = &ptr;
 
@@ -209,7 +209,7 @@ _open (struct intr_frame *f) {
 	int fd = -1;
 	if((file = filesys_open(filename))!=NULL){
 		fd = next_fd(curr);
-		apply_fd(curr,fd,file);
+		fd = apply_fd(curr,fd,file);
 	}
 	f->R.rax = fd;
 }
@@ -262,9 +262,14 @@ _tell (struct intr_frame *f) {
 }
 
 static void
-_close (struct intr_frame *f) {
+_close (struct intr_frame *f) { //암시적으로 닫기 (실제로 호출 필요 없어보임)
 	int fd = f->R.rdi;
-	
+	const struct thread *curr = thread_current();
+
+	if(!delete_fd(curr,fd)){
+		thread_current() -> exit_status = -1;
+		thread_exit ();
+	}
 }
 
 static void

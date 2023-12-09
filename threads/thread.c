@@ -1118,26 +1118,39 @@ allocate_tid (void) {
 
 int next_fd(struct thread *curr){
 	return curr->last_fd; //files중 비어있는 가장 빠른 fd를 가리킴
+	//full인 경우 -1
 }
 
-void apply_fd(struct thread *curr, int fd, struct file *file){
+int apply_fd(struct thread *curr, int fd, struct file *file){
+	
 	curr->files[fd] = file;
 
 	//last_fd 갱신
-	int fd;
-	for(fd=curr->last_fd; fd<MAX_DESCRIPTER; fd++){
-		if(curr->files[fd]==NULL) {
-			curr->last_fd = fd;
+	int next_fd;
+	for(next_fd = fd; next_fd < MAX_DESCRIPTER; next_fd++){
+		if(curr->files[next_fd]==NULL) {
+			curr->last_fd = next_fd;
 			break;
 		}
 	}
+
+	//full
+	if(next_fd==MAX_DESCRIPTER){
+		curr->last_fd = -1;
+	}
+
+	return next_fd;
 }
 
-void delete_fd(struct thread *curr, int fd){
+bool delete_fd(struct thread *curr, int fd){
+	if(2 > fd || MAX_DESCRIPTER < fd){ //범위 확인
+		return false;
+	}
 	curr->files[fd] = NULL;
-	if(curr->last_fd > fd){
+	if(curr->last_fd != -1 && curr->last_fd > fd){
 		curr->last_fd = fd;
 	}
+	return true;
 }
 
 void list_thread_dump(struct list *list){

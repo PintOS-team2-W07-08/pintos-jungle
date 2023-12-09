@@ -192,7 +192,8 @@ void do_iret (struct intr_frame *tf);
 
 /*for file descriptor */
 int next_fd(struct thread *curr);
-void apply_fd(struct thread *curr, int fd, struct file *file);
+int apply_fd(struct thread *curr, int fd, struct file *file);
+bool delete_fd(struct thread *curr, int fd);
 
 void list_thread_dump(struct list *);
 
