@@ -803,6 +803,9 @@ init_thread (struct thread *t, const char *name, int priority) {
 		t->priority = PRI_MAX + 1;
 	} 
 
+	//stdin, stdio
+	t->last_fd=2;
+
 	list_init(&t->child_sema_list);
 	
 	t->magic = THREAD_MAGIC;
@@ -1100,7 +1103,6 @@ schedule (void) {
 		thread_launch (next);
 	}
 }
-
 /* Returns a tid to use for a new thread. */
 static tid_t
 allocate_tid (void) {
@@ -1112,6 +1114,30 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+int next_fd(struct thread *curr){
+	return curr->last_fd; //files중 비어있는 가장 빠른 fd를 가리킴
+}
+
+void apply_fd(struct thread *curr, int fd, struct file *file){
+	curr->files[fd] = file;
+
+	//last_fd 갱신
+	int fd;
+	for(fd=curr->last_fd; fd<MAX_DESCRIPTER; fd++){
+		if(curr->files[fd]==NULL) {
+			curr->last_fd = fd;
+			break;
+		}
+	}
+}
+
+void delete_fd(struct thread *curr, int fd){
+	curr->files[fd] = NULL;
+	if(curr->last_fd > fd){
+		curr->last_fd = fd;
+	}
 }
 
 void list_thread_dump(struct list *list){

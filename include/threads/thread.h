@@ -6,6 +6,8 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "threads/fixed_point.h"
+#include "filesys/file.h"
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -28,6 +30,8 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/*file descriptor*/
+#define MAX_DESCRIPTER 128
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -102,6 +106,8 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	struct file *files[MAX_DESCRIPTER];
+	int last_fd;
 	struct list child_sema_list;
 	int exit_status;
 
@@ -183,6 +189,10 @@ void thread_set_load_avg (void);
 void do_iret (struct intr_frame *tf);
 
 // static void thread_launch (struct thread *th);
+
+/*for file descriptor */
+int next_fd(struct thread *curr);
+void apply_fd(struct thread *curr, int fd, struct file *file);
 
 void list_thread_dump(struct list *);
 

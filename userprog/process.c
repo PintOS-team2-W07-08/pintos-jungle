@@ -658,8 +658,8 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* 
-user stack에 최소 스택을 만들고, if_rsp에 그 주소를 담음
-Create a minimal stack by mapping a zeroed page at the USER_STACK */
+ * user stack에 최소 스택을 만들고, if_rsp에 그 주소를 담음
+ * Create a minimal stack by mapping a zeroed page at the USER_STACK */
 static bool
 setup_stack (struct intr_frame *if_) {
 	uint8_t *kpage;

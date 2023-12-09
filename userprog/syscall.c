@@ -1,18 +1,28 @@
 #include "userprog/syscall.h"
 #include <stdio.h>
 #include <syscall-nr.h>
+#include <user/syscall.h>  /* include lib/usr/syscall.h for pid_t */
+
 #include "threads/interrupt.h"
 #include "threads/thread.h"
 #include "threads/loader.h"
 #include "userprog/gdt.h"
+
+#include "userprog/process.h"
+
 #include "threads/flags.h"
 #include "intrinsic.h"
 
 #include "threads/init.h"
-#include <lib/user/syscall.h>  /* include lib/usr/syscall.h for pid_t */
+
+#include "filesys/filesys.h"
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
+
+static void check_valid_pointer(void * ptr);
+static void check_valid_pointer2(void * ptr);
+static int64_t get_user (const uint8_t *uaddr);
 
 static void _halt (struct intr_frame *);
 static void _exit_ (struct intr_frame *);
@@ -86,6 +96,48 @@ syscall_handler (struct intr_frame *f) {
 	return; //변경
 }
 
+/* 
+	첫번째 방법 - 유효성 확인 후 포인터 해제
+		thread/mmu.c , vaddr.h 함수 참고
+*/
+static void check_valid_pointer(void * ptr){
+	struct thread *curr = thread_current();
+	uintptr_t ptr_addr = &ptr;
+
+	if(!is_user_vaddr(ptr) 
+		|| pml4_get_page(curr->pml4, ptr)==NULL){
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
+}
+
+/*
+	두번째 방법 - KERN_BASE 아래 가리키는지만 확인 후 역참조.
+*/
+static void check_valid_pointer2(void * ptr){
+	struct thread *curr = thread_current();
+	uintptr_t ptr_addr = &ptr;
+
+	bool success = false;
+	if(!is_user_vaddr(ptr)
+		|| get_user(ptr)==-1 //여기서 검사하지 않고 역참조시 검사하는게 맞는 걸수도
+	){
+		thread_current()->exit_status = -1;
+		thread_exit();
+	}
+}
+
+static int64_t
+get_user (const uint8_t *uaddr) {
+    int64_t result;
+    __asm __volatile (
+    "movabsq $done_get, %0\n"
+    "movzbq %1, %0\n"
+    "done_get:\n"
+    : "=&a" (result) : "m" (*uaddr));
+    return result;
+}
+
 static void 
 _halt (struct intr_frame *f UNUSED) {
 	power_off();
@@ -102,7 +154,7 @@ static void
 _fork (struct intr_frame *f){
 	const char *thread_name = (char *)f->R.rdi;
 
-	pid_t pid;
+	pid_t pid = process_fork(thread_name, f);
 	f->R.rax = pid;
 }
 
@@ -118,7 +170,7 @@ static void
 _wait (struct intr_frame *f) {
 	pid_t pid = f->R.rdi;
 
-	int exit_status;
+	int exit_status = process_wait(pid);
 	f->R.rax = exit_status;
 }
 
@@ -126,9 +178,14 @@ static void
 _create (struct intr_frame *f) {
 	const char *file = (char *)f->R.rdi;
 	unsigned initial_size = f->R.rsi;
+	// printf("create file: %s\n", file);
+	bool success = false;
 
+	check_valid_pointer(file);
 
-	bool success;
+	if(file!=NULL){
+		success = filesys_create(file, initial_size);
+	}
 	f->R.rax = success;
 }
 
@@ -143,9 +200,17 @@ _remove (struct intr_frame *f) {
 
 static void
 _open (struct intr_frame *f) {
-	const char *file = (char *)f->R.rdi;
-	
-	int fd ;
+	const char *filename = (char *)f->R.rdi;
+	const struct file *file;
+	const struct thread *curr = thread_current();
+
+	check_valid_pointer(filename);
+
+	int fd = -1;
+	if((file = filesys_open(filename))!=NULL){
+		fd = next_fd(curr);
+		apply_fd(curr,fd,file);
+	}
 	f->R.rax = fd;
 }
 
