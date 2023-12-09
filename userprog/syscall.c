@@ -94,7 +94,7 @@ _halt (struct intr_frame *f UNUSED) {
 static void
 _exit_ (struct intr_frame *f) {
 	int status = f->R.rdi;
-	thread_current() -> exit_status = status;
+	thread_current() -> exit_status = status; //이거 맞나?
 	thread_exit ();
 }
 

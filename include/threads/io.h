@@ -129,7 +129,8 @@ outw (uint16_t port, uint16_t data) {
 	asm volatile ("outw %0,%w1" : : "a" (data), "d" (port));
 }
 
-/* Writes to PORT each 16-bit unit (halfword) of data in the
+/* 하드웨어에 쓰는 핵심
+   Writes to PORT each 16-bit unit (halfword) of data in the
    CNT-halfword buffer starting at ADDR. */
 static inline void
 outsw (uint16_t port, const void *addr, size_t cnt) {
