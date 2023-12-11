@@ -11,13 +11,15 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
+bool check_address(const char *file);
+
 void _halt (void);
 void _exit (struct intr_frame *f);
-int _write (struct intr_frame *f);
+int _write (struct intr_frame *f );
 // pid_t _fork (const char *thread_name);
 // int _exec (const char *file);
 // int _wait (pid_t);
-// bool _create (const char *file, unsigned initial_size);
+bool _create (struct intr_frame *f);
 // bool _remove (const char *file);
 // int _open (const char *file);
 // int _filesize (int fd);
@@ -73,7 +75,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		// case SYS_FORK:	_fork(f);	break;
 		// case SYS_EXEC:	_exec(f);	break;
 		// case SYS_WAIT:	_wait(f);	break;
-		// case SYS_CREATE:	_create(f);	break;
+		case SYS_CREATE:	_create(f);	break;
 		// case SYS_REMOVE:	_remove(f);	break;
 		// case SYS_OPEN:	_open(f);	break;
 		// case SYS_FILESIZE:	_filesize(f);	break;
@@ -93,7 +95,7 @@ syscall_handler (struct intr_frame *f UNUSED) {
 // Implement system call
 void 
 _halt (void) {
-	power_off();                                               
+	power_off();                                           
 }
 
 void
@@ -104,25 +106,31 @@ _exit (struct intr_frame *f) {
 	// TODO: 프로세스 부모가 wait인 경우, 부모는 이 status를 반환
 }
 
-// bool
-// _create (struct intr_frame *f) {
-// 	// ASSERT 잘못된 주소의 접근 막기 (NULL값이거나 PHYS_BASE 위의 주소이다)
-// 	if(file == NULL || &(file) > LOADER_PHYS_BASE) {
-// 		return false;
-// 	}
-// 	// initial_size 바이트 크기의 file 이라는 새 파일 만듦
-// 	return filesys_create(file, initial_size);
-// 	// 주의: 새 파일 만든다해서 파일 열리지는 않음. 열려면, open() 필요
-// }
-//  /* 주소 유효성 검사 */
-// void
-// check_address( ) {
-// 	// NULL 포인터인지는 알아서 걸러줌
-// 	// PHYS_BASE 아래의 주소인지 && 페이지 할당이 되었는지(함수로 구현되어 있음.)
-// 	if(file == NULL || &(file) > LOADER_PHYS_BASE) {
-// 		thread_exit();
-// 	}
-// }
+bool
+_create (struct intr_frame *f) {
+	const char *file = f->R.rdi;
+	int initial_size = f->R.rsi;
+	// ASSERT 잘못된 주소의 접근 막기 (NULL값이거나 PHYS_BASE 위의 주소이다)
+	bool success = false;
+	if(!check_address(file)) {
+		return false;
+	}
+	// initial_size 바이트 크기의 file 이라는 새 파일 만듦
+	return filesys_create(file, initial_size);
+	// 주의: 새 파일 만든다해서 파일 열리지는 않음. 열려면, open() 필요
+}
+
+bool
+check_address(const char *file) {
+	struct thread *curr = thread_current();
+	uint64_t *_pml4 = curr -> pml4;
+	// NULL 포인터인지는 알아서 걸러줌.
+	// PHYS_BASE 아래의 주소인지 && 페이지 할당이 되었는지(함수로 구현되어 있음.)
+	if(is_user_vaddr(file) && pml4_get_page(_pml4, file) != NULL) {
+		return true;
+	}
+	return false;
+}
 
 int _write(struct intr_frame *f) {
 	printf("%s", f->R.rsi);
