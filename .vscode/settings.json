@@ -3,6 +3,7 @@
         "syscall.h": "c",
         "intrinsic.h": "c",
         "syscall-nr.h": "c",
-        "stdio.h": "c"
+        "stdio.h": "c",
+        "thread.h": "c"
     }
 }

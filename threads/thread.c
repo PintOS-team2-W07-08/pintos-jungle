@@ -803,8 +803,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 		t->priority = PRI_MAX + 1;
 	} 
 
-	//stdin, stdio
-	t->last_fd=2;
+	//stdin, stdio, stderr
+	t->last_fd = MIN_DESCRIPTER;
 
 	list_init(&t->child_sema_list);
 	
@@ -1123,6 +1123,7 @@ int next_fd(struct thread *curr){
 
 int apply_fd(struct thread *curr, int fd, struct file *file){
 	
+	// printf("apply fd %d\n",fd);
 	curr->files[fd] = file;
 
 	//last_fd 갱신
@@ -1139,13 +1140,21 @@ int apply_fd(struct thread *curr, int fd, struct file *file){
 		curr->last_fd = -1;
 	}
 
-	return next_fd;
+	return fd;
+}
+
+bool check_fd_validate(int fd){
+	if(MIN_DESCRIPTER > fd || MAX_DESCRIPTER < fd){ //범위 확인
+		return false;
+	}
+	return true;
 }
 
 bool delete_fd(struct thread *curr, int fd){
-	if(2 > fd || MAX_DESCRIPTER < fd){ //범위 확인
+	if(!check_fd_validate(fd)){
 		return false;
 	}
+
 	curr->files[fd] = NULL;
 	if(curr->last_fd != -1 && curr->last_fd > fd){
 		curr->last_fd = fd;

@@ -31,6 +31,7 @@ typedef int tid_t;
 #define PRI_MAX 63                      /* Highest priority. */
 
 /*file descriptor*/
+#define MIN_DESCRIPTER 3
 #define MAX_DESCRIPTER 128
 /* A kernel thread or user process.
  *
@@ -193,6 +194,7 @@ void do_iret (struct intr_frame *tf);
 /*for file descriptor */
 int next_fd(struct thread *curr);
 int apply_fd(struct thread *curr, int fd, struct file *file);
+bool check_fd_validate(int fd);
 bool delete_fd(struct thread *curr, int fd);
 
 void list_thread_dump(struct list *);
