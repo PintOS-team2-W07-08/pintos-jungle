@@ -17,6 +17,7 @@
 #include "intrinsic.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "filesys/file.h"
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -91,6 +92,7 @@ static tid_t allocate_tid (void);
 // setup temporal gdt first.
 static uint64_t gdt[3] = { 0, 0x00af9a000000ffff, 0x00cf92000000ffff };
 
+
 /* Initializes the threading system by transforming the code
    that's currently running into a thread.  This can't work in
    general and it is possible in this case only because loader.S
@@ -122,15 +124,13 @@ thread_init (void) {
 	lock_init (&mlfq_lock);
 
 #ifdef USERPROG
-	struct thread *curr = thread_current();
-	struct file *arr_fdt[64];
-
-	for (int i = 0; i < 64; ++i) {
-		arr_fdt[i] = curr -> fdt[i];
-	}
+	struct thread *curr = running_thread ();
 	
 	for (int i = 3; i < 64 ;i++){
-		arr_fdt[i]-> inode = NULL; 
+		curr -> fdt[i] = NULL; 
+	}
+	for (int i = 3; i < 64 ;i++){
+		// printf("%d번 인덱스의 값:%s\n", i, curr -> fdt[i]);
 	}
 #endif
 
@@ -353,6 +353,8 @@ thread_current (void) {
 	   have overflowed its stack.  Each thread has less than 4 kB
 	   of stack, so a few big automatic arrays or moderate
 	   recursion can cause stack overflow. */
+	// t->magic == THREAD_MAGIC;
+
 	ASSERT (is_thread (t));
 	ASSERT (t->status == THREAD_RUNNING);
 

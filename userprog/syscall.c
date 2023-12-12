@@ -8,6 +8,8 @@
 #include "threads/flags.h"
 #include "intrinsic.h"
 
+#include <string.h>
+
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
@@ -22,7 +24,7 @@ int _write (struct intr_frame *f );
 bool _create (struct intr_frame *f );
 // bool _remove (struct intr_frame *f);
 int _open (struct intr_frame *f);
-// int _filesize (struct intr_frame *f);
+int _filesize (struct intr_frame *f);
 // void _seek (struct intr_frame *f);
 // unsigned _tell (struct intr_frame *f);
 void _close (struct intr_frame *f);
@@ -41,6 +43,7 @@ void _close (struct intr_frame *f);
 #define MSR_STAR 0xc0000081         /* Segment selector msr */
 #define MSR_LSTAR 0xc0000082        /* Long mode SYSCALL target */
 #define MSR_SYSCALL_MASK 0xc0000084 /* Mask for the eflags */
+
 
 void
 syscall_init (void) {
@@ -76,8 +79,8 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		// case SYS_WAIT:	_wait(pid);	break;
 		// case SYS_CREATE:	_create(f);	break;
 		// case SYS_REMOVE:	_remove(f);	break;
-		case SYS_OPEN:	_open(f);	break;
-		// case SYS_FILESIZE:	_filesize(f);	break;
+		case SYS_OPEN:	f->R.rax =_open(f);	break;
+		case SYS_FILESIZE:	f->R.rax =_filesize(f);	break;
 		// case SYS_READ:	_read(f);	break;
 		case SYS_WRITE:	_write(f);	break;
 		// case SYS_SEEK:	_seek(f);	break;
@@ -157,26 +160,46 @@ int _write(struct intr_frame *f) {
 // bool _remove (struct intr_frame *f);
 
 int _open (struct intr_frame *f) {
-	struct char *file = f->R.rdi;
-	struct thread *curr = thread_current();
-	struct file *arr_fdt[64] = curr -> fdt;
-	int i;
+	char *name = f->R.rdi;
+	if(name == NULL) return -1;
+	struct file *file = filesys_open(name);
+	if(file == NULL){
+		return -1;
+	}
 
+	// if(!check_address(file)) return -1;
+	struct thread *curr = thread_current();
+	if(curr == NULL) {
+		return -1;
+	}
 	// inode가 NULL인 비어있는 FD찾기
+	int i;
 	for (i = 3; i< 64 ;i++){
-		if(arr_fdt[i].inode == NULL){
-			arr_fdt[i].inode = file->inode;
-			return i;
+		if(curr -> fdt[i] == NULL) {
+			curr-> fdt[i] = file;
+			break;
 		}
 	}
+	return i;
 }
 
-// int _filesize (struct intr_frame *f);
+int _filesize (struct intr_frame *f) {
+	int fd = f -> R.rdi;
+	struct thread* curr = thread_current();
+	struct file *file = curr->fdt[fd];
+	return file_length(file);
+}
 
-// int _read (struct intr_frame *f);
+int _read (struct intr_frame *f) {
+	
+}
 
 // void _seek (struct intr_frame *f);
 
 // unsigned _tell (struct intr_frame *f);
 
-// void _close (struct intr_frame *f);
+void _close (struct intr_frame *f) {
+	int fd = f->R.rdi;
+	struct thread* curr = thread_current();
+	curr -> fdt[fd] = NULL;
+}
