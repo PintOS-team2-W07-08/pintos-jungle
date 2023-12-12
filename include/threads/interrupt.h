@@ -3,6 +3,8 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include "filesys/file.h"
+#include "filesys/inode.h"
 
 /* Interrupts on or off? */
 enum intr_level {

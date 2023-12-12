@@ -121,6 +121,19 @@ thread_init (void) {
 	lock_init (&tid_lock);
 	lock_init (&mlfq_lock);
 
+#ifdef USERPROG
+	struct thread *curr = thread_current();
+	struct file *arr_fdt[64];
+
+	for (int i = 0; i < 64; ++i) {
+		arr_fdt[i] = curr -> fdt[i];
+	}
+	
+	for (int i = 3; i < 64 ;i++){
+		arr_fdt[i]-> inode = NULL; 
+	}
+#endif
+
 	if(!thread_mlfqs){
 		list_init (&ready_list);
 	}else{

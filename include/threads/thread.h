@@ -102,7 +102,10 @@ struct thread {
 	struct list_elem elem;              /* List element. */
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
-	uint64_t *pml4;                     /* Page map level 4 */
+	uint64_t *pml4;
+	struct file *fdt[64];
+	int next_fd;
+                    /* Page map level 4 */
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */

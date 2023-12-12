@@ -16,17 +16,16 @@ bool check_address(const char *file);
 void _halt (void);
 void _exit (struct intr_frame *f);
 int _write (struct intr_frame *f );
-// pid_t _fork (const char *thread_name);
-// int _exec (const char *file);
-// int _wait (pid_t);
-bool _create (struct intr_frame *f);
-// bool _remove (const char *file);
-// int _open (const char *file);
-// int _filesize (int fd);
-// int _read (int fd, void *buffer, unsigned length);
-// void _seek (int fd, unsigned position);
-// unsigned _tell (int fd);
-// void _close (int fd);
+// pid_t _fork (struct intr_frame *f );
+// int _exec (struct intr_frame *f );
+// int _wait (pid_t pid);
+bool _create (struct intr_frame *f );
+// bool _remove (struct intr_frame *f);
+int _open (struct intr_frame *f);
+// int _filesize (struct intr_frame *f);
+// void _seek (struct intr_frame *f);
+// unsigned _tell (struct intr_frame *f);
+void _close (struct intr_frame *f);
 
 // int _dup2(int oldfd, int newfd);
 
@@ -74,16 +73,16 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		case SYS_EXIT:	_exit(f);	break;
 		// case SYS_FORK:	_fork(f);	break;
 		// case SYS_EXEC:	_exec(f);	break;
-		// case SYS_WAIT:	_wait(f);	break;
-		case SYS_CREATE:	_create(f);	break;
+		// case SYS_WAIT:	_wait(pid);	break;
+		// case SYS_CREATE:	_create(f);	break;
 		// case SYS_REMOVE:	_remove(f);	break;
-		// case SYS_OPEN:	_open(f);	break;
+		case SYS_OPEN:	_open(f);	break;
 		// case SYS_FILESIZE:	_filesize(f);	break;
 		// case SYS_READ:	_read(f);	break;
 		case SYS_WRITE:	_write(f);	break;
 		// case SYS_SEEK:	_seek(f);	break;
 		// case SYS_TELL:	_tell(f);	break;
-		// case SYS_CLOSE:	_close(f);	break;
+		case SYS_CLOSE:	_close(f);	break;
 		// case SYS_DUP2:	_dup2();	break;
 		default:
 			break;
@@ -132,8 +131,52 @@ check_address(const char *file) {
 	return false;
 }
 
+
+
 int _write(struct intr_frame *f) {
 	printf("%s", f->R.rsi);
 	return 0;
 }
 
+// pid_t _fork (const char *thread_name) {
+// 	const char *thread_name = f->R.rdi;
+// 	pid_t child_process;
+
+// 	return child_process;
+// }
+
+// int _exec (struct intr_frame *f) {
+// 	char *cmd_line= f->R.rdi;
+	
+// 	return(0); // 정상일때
+// }
+
+// int _wait (pid_t) {
+
+// }
+// bool _remove (struct intr_frame *f);
+
+int _open (struct intr_frame *f) {
+	struct char *file = f->R.rdi;
+	struct thread *curr = thread_current();
+	struct file *arr_fdt[64] = curr -> fdt;
+	int i;
+
+	// inode가 NULL인 비어있는 FD찾기
+	for (i = 3; i< 64 ;i++){
+		if(arr_fdt[i].inode == NULL){
+			arr_fdt[i].inode = file->inode;
+			return i;
+		}
+	}
+}
+
+// int _filesize (struct intr_frame *f);
+
+// int _read (struct intr_frame *f);
+
+// void _seek (struct intr_frame *f);
+
+// unsigned _tell (struct intr_frame *f);
+
+// void _close (struct intr_frame *f);
