@@ -17,6 +17,7 @@
 #include "intrinsic.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -259,13 +260,6 @@ thread_create (const char *name, int priority,
 	/* Initialize thread. */
 	init_thread (t, name, priority);
 
-	//상속
-	struct thread* parent_thread = thread_current();
-	if(is_thread(parent_thread)){
-		t->parent_elem = &parent_thread->elem;
-		// printf("parent_elem: %s\n", parent_thread->name);
-	}
-
 	tid = t->tid = allocate_tid ();
 
 	/* Call the kernel_thread if it scheduled.
@@ -278,6 +272,16 @@ thread_create (const char *name, int priority,
 	t->tf.ss = SEL_KDSEG;
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
+
+	//상속
+	struct thread* parent_thread = thread_current();
+	if(is_thread(parent_thread)){
+		t->parent_elem = parent_thread->elem;
+		// printf("parent_elem: %s\n", parent_thread->name);
+		list_push_back(&parent_thread->child_list,&t->child_elem);
+		sema_init(&t->wait_sema, 0);
+
+	}
 
 	/* Add to run queue. */
 	thread_unblock (t);
@@ -806,7 +810,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 	//stdin, stdio, stderr
 	t->last_fd = MIN_DESCRIPTER;
 
-	list_init(&t->child_sema_list);
+	list_init(&t->child_list);
+	list_init(&t->fork_sema);
 	
 	t->magic = THREAD_MAGIC;
 	return;

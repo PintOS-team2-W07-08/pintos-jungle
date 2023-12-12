@@ -14,6 +14,7 @@
 #include "intrinsic.h"
 
 #include "threads/init.h"
+#include "threads/palloc.h"
 
 #include "filesys/filesys.h"
 
@@ -74,6 +75,10 @@ void
 syscall_handler (struct intr_frame *f) {
 	// printf ("system call! #:%d\n", (int)f->R.rax);
 	// printf("thread name: %s\n",thread_current()->name);
+	// printf("-----sys handler current intr frame---\n");
+	// intr_dump_frame(&thread_current()->tf);
+	// printf("----sys handler intr frame-----\n");
+	// intr_dump_frame(f);
 
 	switch((int)f->R.rax){
 		case SYS_HALT :  	_halt (f); 		break;
@@ -111,7 +116,7 @@ static void validate_pointer(void *ptr){
 	struct thread *curr = thread_current();
 	uintptr_t ptr_addr = &ptr;
 
-	if(!is_user_vaddr(ptr) 
+	if(!is_user_vaddr(ptr)
 		|| pml4_get_page(curr->pml4, ptr)==NULL){
 		thread_terminate();
 	}
@@ -179,18 +184,30 @@ static void
 _fork (struct intr_frame *f){
 	const char *thread_name = (char *)f->R.rdi;
 
-	pid_t pid = process_fork(thread_name, f);
+	validate_pointer(thread_name);
+	// printf("%s\n",thread_name);
+	
+	pid_t pid = (pid_t)process_fork(thread_name, f);
+	// printf("fork return %d\n", pid);
 	f->R.rax = pid;
 }
 
 static void
 _exec (struct intr_frame *f) {
-	const char *cmd_line = (char *)f->R.rdi;
+	char *file_name = (char *)f->R.rdi;
 
-	
+	validate_pointer(file_name);
+
+	char *fn_copy;
+	fn_copy = palloc_get_page (0);
+	if (fn_copy == NULL){
+		return TID_ERROR;
+	}
+	strlcpy (fn_copy, file_name, PGSIZE);
+	// const char *filename;
 	//file_deny_write(filename);
 
-	int exit_status;
+	int exit_status = process_exec(fn_copy);
 	f->R.rax = exit_status;
 }
 
@@ -279,7 +296,7 @@ _write (struct intr_frame *f) { //1,2에 출력하기
 		printf("%s",(char *)buffer);
 		w_bytes = size;
 	}else{
-		if((file =  validate_fd(fd))!=NULL){  //TODO: deny_write 체크
+		if((file = validate_fd(fd))!=NULL){  //TODO: deny_write 체크
 			w_bytes = (int)file_write(file, buffer, size);
 		}
 	}

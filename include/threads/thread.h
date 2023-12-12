@@ -7,6 +7,7 @@
 #include "threads/interrupt.h"
 #include "threads/fixed_point.h"
 #include "filesys/file.h"
+#include "threads/synch.h"
 
 #ifdef VM
 #include "vm/vm.h"
@@ -93,7 +94,7 @@ typedef int tid_t;
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
-	struct list_elem *parent_elem;
+	struct list_elem parent_elem;
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int base_priority;					/* Base priority for recall */
@@ -109,7 +110,14 @@ struct thread {
 
 	struct file *files[MAX_DESCRIPTER];
 	int last_fd;
-	struct list child_sema_list;
+
+	//for wait
+	struct list child_list; 
+	struct list_elem child_elem;
+
+	struct semaphore wait_sema;
+	struct semaphore fork_sema;
+
 	int exit_status;
 
 #ifdef USERPROG

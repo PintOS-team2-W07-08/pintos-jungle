@@ -4,6 +4,8 @@
         "intrinsic.h": "c",
         "syscall-nr.h": "c",
         "stdio.h": "c",
-        "thread.h": "c"
+        "thread.h": "c",
+        "file.h": "c",
+        "string.h": "c"
     }
 }
