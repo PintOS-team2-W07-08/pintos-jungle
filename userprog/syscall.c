@@ -208,7 +208,11 @@ _exec (struct intr_frame *f) {
 	//file_deny_write(filename);
 
 	int exit_status = process_exec(fn_copy);
+
+	//정상의 경우 반환 안함
+	thread_current() -> exit_status = exit_status;
 	f->R.rax = exit_status;
+	thread_exit ();
 }
 
 static void

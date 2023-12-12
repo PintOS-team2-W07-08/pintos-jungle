@@ -18,6 +18,8 @@
 #include "threads/mmu.h"
 #include "threads/vaddr.h"
 
+#include "userprog/syscall.h"
+
 #include "intrinsic.h"
 #ifdef VM
 #include "vm/vm.h"
@@ -207,7 +209,9 @@ __do_fork (void *aux) {
 		if_.R.rax = 0;
 		do_iret (&if_);
 error:
+	current -> exit_status = -1;
 	thread_exit ();
+	sema_up(fork_sema);
 }
 
 /* 
@@ -237,13 +241,16 @@ process_exec (void *f_name) {
 	// printf("file name : %s\n", file_name);
 	/* And then load the binary */
 	success = load (file_name, &_if);
-
 	// printf("fn after load %s\n", file_name);
 	/* If load failed, quit. */
-	palloc_free_page (file_name);
-	if (!success)
+	palloc_free_page (file_name); //이것 때문에 앞에서 page 잡아줘야 함.
+	if (!success){
+		// printf("fail!\n");
 		return -1;
+	}
 
+	struct thread* current = thread_current();
+	
 	//hex_dump
 	// printf("execute _if\n");
 	// intr_dump_frame(&_if);
@@ -288,8 +295,9 @@ process_wait (tid_t child_tid) {
 				printf("wait 중복 호출");
 				break;
 			}
-			status = child->exit_status;
 			sema_down(sema);
+			status = child->exit_status;
+			// printf("child exit_status %d\n",status);
 			list_remove(elem);
 			break;
 		}
@@ -314,6 +322,7 @@ process_exit (void) {
 	printf("%s: exit(%d)\n",name,status); //printf?
 
 	process_cleanup ();
+
 }
 
 /* 
