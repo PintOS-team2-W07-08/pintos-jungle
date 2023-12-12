@@ -189,6 +189,7 @@ __do_fork (void *aux) {
 			current->files[i] = file_duplicate(parentfile);
 		}
 	}
+	current->last_fd = parent->last_fd;
 
 	struct semaphore *fork_sema;
 	fork_sema = &parent->fork_sema;
