@@ -24,11 +24,11 @@ int _write (struct intr_frame *f );
 bool _create (struct intr_frame *f );
 // bool _remove (struct intr_frame *f);
 int _open (struct intr_frame *f);
-int _filesize (struct intr_frame *f);
+// int _filesize (struct intr_frame *f);
 // void _seek (struct intr_frame *f);
 // unsigned _tell (struct intr_frame *f);
 void _close (struct intr_frame *f);
-
+int read (struct intr_frame *f);
 // int _dup2(int oldfd, int newfd);
 
 /* System call.
@@ -80,8 +80,8 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		// case SYS_CREATE:	_create(f);	break;
 		// case SYS_REMOVE:	_remove(f);	break;
 		case SYS_OPEN:	f->R.rax =_open(f);	break;
-		case SYS_FILESIZE:	f->R.rax =_filesize(f);	break;
-		// case SYS_READ:	_read(f);	break;
+		// case SYS_FILESIZE:	f->R.rax =_filesize(f);	break;
+		case SYS_READ:	f->R.rax =_read(f);	break;
 		case SYS_WRITE:	_write(f);	break;
 		// case SYS_SEEK:	_seek(f);	break;
 		// case SYS_TELL:	_tell(f);	break;
@@ -183,15 +183,26 @@ int _open (struct intr_frame *f) {
 	return i;
 }
 
-int _filesize (struct intr_frame *f) {
-	int fd = f -> R.rdi;
-	struct thread* curr = thread_current();
-	struct file *file = curr->fdt[fd];
-	return file_length(file);
-}
+// int _filesize (struct intr_frame *f) {
+// 	int fd = f -> R.rdi;
+// 	struct thread* curr = thread_current();
+// 	struct file *file = curr->fdt[fd];
+// 	return file_length(file);
+// }
 
 int _read (struct intr_frame *f) {
-	
+	int fd = f->R.rdi;
+	struct thread* curr = thread_current();
+	struct file *file = curr->fdt[fd];
+
+	void *buffer = f->R.rsi;
+	unsigned size = f->R.rdx;
+	printf("=======fd/ buffer/ size: %d /%d /%d \n", f->R.rdi, f->R.rsi, f->R.rdx);
+
+	if(fd == 0) {
+		input_getc();
+	}
+	return file_read(file, buffer, size);
 }
 
 // void _seek (struct intr_frame *f);
