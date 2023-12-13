@@ -182,7 +182,6 @@ _fork (struct intr_frame *f){
 	const char *thread_name = (char *)f->R.rdi;
 
 	validate_pointer(thread_name);
-	// printf("%s\n",thread_name);
 	
 	pid_t pid = (pid_t)process_fork(thread_name, f);
 	// printf("fork return %d\n", pid);

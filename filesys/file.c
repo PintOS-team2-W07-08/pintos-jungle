@@ -2,9 +2,11 @@
 #include <debug.h>
 #include "filesys/inode.h"
 #include "threads/malloc.h"
+#include "threads/synch.h"
 
 /* An open file. */
 struct file {
+	struct lock lock;
 	struct inode *inode;        /* File's inode. */
 	off_t pos;                  /* Current position. */
 	bool deny_write;            /* Has file_deny_write() been called? */
@@ -20,6 +22,7 @@ file_open (struct inode *inode) {
 		file->inode = inode;
 		file->pos = 0;
 		file->deny_write = false;
+		// lock_init(&file->lock);
 		return file;
 	} else {
 		inode_close (inode);
@@ -95,8 +98,10 @@ file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs) {
  * Advances FILE's position by the number of bytes read. */
 off_t
 file_write (struct file *file, const void *buffer, off_t size) {
+	// lock_acquire(&file->lock);
 	off_t bytes_written = inode_write_at (file->inode, buffer, size, file->pos);
 	file->pos += bytes_written;
+	// lock_release(&file->lock);
 	return bytes_written;
 }
 
@@ -110,7 +115,11 @@ file_write (struct file *file, const void *buffer, off_t size) {
 off_t
 file_write_at (struct file *file, const void *buffer, off_t size,
 		off_t file_ofs) {
-	return inode_write_at (file->inode, buffer, size, file_ofs);
+	// lock_acquire(&file->lock);
+	off_t off_t = inode_write_at (file->inode, buffer, size, file_ofs);
+	// lock_release(&file->lock);
+
+	return off_t;
 }
 
 /* Prevents write operations on FILE's underlying inode

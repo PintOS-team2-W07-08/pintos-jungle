@@ -99,13 +99,14 @@ struct thread {
 	int base_priority;					/* Base priority for recall */
 	int priority;						/* Superficial Priority for donate */
 	int niceness;
+	struct list_elem elem;              /* List element. */
+
 	fixed_point recent_cpu;
 	int64_t wakeup_tick;
 	struct list donor_list;
 	struct list_elem donor_elem;
 	struct lock *waitonlock;
 	/* Shared between thread.c and synch.c. */
-	struct list_elem elem;              /* List element. */
 
 	struct file *ex_file;
 	struct file *files[MAX_DESCRIPTER];

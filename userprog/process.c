@@ -77,19 +77,20 @@ initd (void *f_name) {
 	NOT_REACHED ();
 }
 
-/* Clones the current process as `name`. Returns the new process's thread id, or
- * TID_ERROR if the thread cannot be created. */
 struct aux_arg{
 	struct thread *parent;
 	struct intr_frame *if_;
 };
 
+/* Clones the current process as `name`. Returns the new process's thread id, or
+ * TID_ERROR if the thread cannot be created. */
 tid_t
 process_fork (const char *name, struct intr_frame *if_ ) {
 	/* Clone current thread to new thread.*/
 	struct thread *curr = thread_current();
-	//if_ - userland tf
+	//if_ - systemcall 당시에 userland tf
 	//current->tf 현재의 커널의 tf
+	
 	sema_init(&curr->fork_sema,0);
 	// printf("fork sema init %s\n", curr->name);
 
@@ -117,8 +118,8 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	void *newpage;
 	bool writable;
 
-	/* 1. TODO: If the parent_page is kernel page, then return immediately. 왜?*/
-	if(is_kern_pte(pte)) return true; //?
+	/* 1. TODO: If the parent_page is kernel page, then return immediately.*/
+	if(is_kern_pte(pte)) return true; //왜?
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	if((parent_page = pml4_get_page (parent->pml4, va))==NULL){
@@ -136,14 +137,14 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	 *    TODO: check whether parent's page is writable or not (set WRITABLE
 	 *    TODO: according to the result). */
 	memcpy(newpage,parent_page,PGSIZE);
-	writable =is_writable(pte);
+	writable = is_writable(pte);
 
 	/* 5. Add new page to child's page table at address VA with WRITABLE
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
+		/* 6. TODO: if fail to insert page, do error handling. */
 		palloc_free_page(newpage);
 		return false;
-		/* 6. TODO: if fail to insert page, do error handling. */
 	}
 	return true;
 }
@@ -213,8 +214,7 @@ __do_fork (void *aux) {
 		if_.R.rax = 0;
 		do_iret (&if_);
 error:
-	current -> exit_status = -1;
-	thread_exit ();
+	exit_with_status(-1);
 	sema_up(fork_sema);
 }
 
@@ -304,7 +304,7 @@ process_wait (tid_t child_tid) {
 			status = child->exit_status;
 			// printf("child exit_status %d\n",status);
 			list_remove(elem);
-			break;
+			return status;
 		}
 		elem = next_elem;
 	}
@@ -321,12 +321,11 @@ process_exit (void) {
 
 	// printf("preparing %s: exit(%d)\n",name,status); //printf?
 	struct semaphore *sema = &curr->wait_sema;
-	sema_up(sema);
 	/*
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	// printf("%s: exit(%d)\n",name,status); //printf?
-	// file_allow_write(&curr->ex_file); //안해도 클로스하면 활성화
 	file_close(curr->ex_file);
+	sema_up(sema);
+
 	process_cleanup ();
 
 }
@@ -471,15 +470,16 @@ load (const char *file_name, struct intr_frame *if_) {
 
 	file_name = argv[0];
 	/* Open executable file. */
+	// printf("file name %s\n",file_name);
 	file = filesys_open (file_name);
-	file_deny_write(file);
-	t->ex_file = file;
+	
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
+		exit_with_status(-1);
 		goto done;
 	}
-	// strlcpy (t->name, file_name, sizeof t->name);
-
+	t->ex_file = file;
+	file_deny_write(file);
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
