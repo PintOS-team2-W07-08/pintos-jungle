@@ -28,7 +28,7 @@ int _open (struct intr_frame *f);
 // void _seek (struct intr_frame *f);
 // unsigned _tell (struct intr_frame *f);
 void _close (struct intr_frame *f);
-int read (struct intr_frame *f);
+int _read (struct intr_frame *f);
 // int _dup2(int oldfd, int newfd);
 
 /* System call.
@@ -128,7 +128,7 @@ check_address(const char *file) {
 	uint64_t *_pml4 = curr -> pml4;
 	// NULL 포인터인지는 알아서 걸러줌.
 	// PHYS_BASE 아래의 주소인지 && 페이지 할당이 되었는지(함수로 구현되어 있음.)
-	if(is_user_vaddr(file) && pml4_get_page(_pml4, file) != NULL) {
+	if(is_user_vaddr(file) || file != NULL) {
 		return true;
 	}
 	return false;
@@ -197,6 +197,9 @@ int _read (struct intr_frame *f) {
 
 	void *buffer = f->R.rsi;
 	unsigned size = f->R.rdx;
+	if(!check_address(file)) {
+		return -1;
+	}
 	printf("=======fd/ buffer/ size: %d /%d /%d \n", f->R.rdi, f->R.rsi, f->R.rdx);
 
 	if(fd == 0) {
