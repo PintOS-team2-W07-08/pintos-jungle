@@ -7,11 +7,17 @@
 #include "userprog/gdt.h"
 #include "threads/flags.h"
 #include "intrinsic.h"
+#include "userprog/exception.h"
+#include "filesys/file.h"
+#include "filesys/filesys.h"
+#include "lib/kernel/stdio.h"
+#include "filesys/inode.h"
 
 #include <string.h>
 
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
+static void page_fault (struct intr_frame *);
 
 bool check_address(const char *file);
 
@@ -24,9 +30,9 @@ int _write (struct intr_frame *f );
 bool _create (struct intr_frame *f );
 // bool _remove (struct intr_frame *f);
 int _open (struct intr_frame *f);
-// int _filesize (struct intr_frame *f);
-// void _seek (struct intr_frame *f);
-// unsigned _tell (struct intr_frame *f);
+int _filesize (struct intr_frame *f);
+void _seek (struct intr_frame *f);
+unsigned _tell (struct intr_frame *f);
 void _close (struct intr_frame *f);
 int _read (struct intr_frame *f);
 // int _dup2(int oldfd, int newfd);
@@ -77,19 +83,20 @@ syscall_handler (struct intr_frame *f UNUSED) {
 		// case SYS_FORK:	_fork(f);	break;
 		// case SYS_EXEC:	_exec(f);	break;
 		// case SYS_WAIT:	_wait(pid);	break;
-		// case SYS_CREATE:	_create(f);	break;
+		case SYS_CREATE:	_create(f);	break;
 		// case SYS_REMOVE:	_remove(f);	break;
 		case SYS_OPEN:	f->R.rax =_open(f);	break;
-		// case SYS_FILESIZE:	f->R.rax =_filesize(f);	break;
+		case SYS_FILESIZE:	f->R.rax =_filesize(f);	break;
 		case SYS_READ:	f->R.rax =_read(f);	break;
-		case SYS_WRITE:	_write(f);	break;
-		// case SYS_SEEK:	_seek(f);	break;
-		// case SYS_TELL:	_tell(f);	break;
+		case SYS_WRITE:	f->R.rax =_write(f);	break;
+		case SYS_SEEK:	_seek(f);	break;
+		case SYS_TELL:	f->R.rax =_tell(f);	break;
 		case SYS_CLOSE:	_close(f);	break;
 		// case SYS_DUP2:	_dup2();	break;
 		default:
 			break;
 	}
+
 	// printf ("system call!\n");
 	// thread_exit ();
 }
@@ -136,10 +143,6 @@ check_address(const char *file) {
 
 
 
-int _write(struct intr_frame *f) {
-	printf("%s", f->R.rsi);
-	return 0;
-}
 
 // pid_t _fork (const char *thread_name) {
 // 	const char *thread_name = f->R.rdi;
@@ -167,7 +170,6 @@ int _open (struct intr_frame *f) {
 		return -1;
 	}
 
-	// if(!check_address(file)) return -1;
 	struct thread *curr = thread_current();
 	if(curr == NULL) {
 		return -1;
@@ -183,34 +185,74 @@ int _open (struct intr_frame *f) {
 	return i;
 }
 
-// int _filesize (struct intr_frame *f) {
-// 	int fd = f -> R.rdi;
-// 	struct thread* curr = thread_current();
-// 	struct file *file = curr->fdt[fd];
-// 	return file_length(file);
-// }
+int _filesize (struct intr_frame *f) {
+	int fd = f -> R.rdi;
+	struct thread *curr = thread_current();
+	struct file *file = curr->fdt[fd];
+	int result = (int)file_length(file);
+	return result;
+}
 
 int _read (struct intr_frame *f) {
 	int fd = f->R.rdi;
 	struct thread* curr = thread_current();
 	struct file *file = curr->fdt[fd];
+	// 유효한 fd 인지 확인해야함 -> 함수 따로 파서 0,1,2 잡혀서 경우 판별해야함.
 
 	void *buffer = f->R.rsi;
+	if(!check_address(buffer)){
+		return -1;
+		}
 	unsigned size = f->R.rdx;
+<<<<<<< HEAD
 	if(!check_address(file)) {
 		return -1;
 	}
 	printf("=======fd/ buffer/ size: %d /%d /%d \n", f->R.rdi, f->R.rsi, f->R.rdx);
+=======
+>>>>>>> ea9e19c940bc746bb46638c13310f4829742cec4
 
 	if(fd == 0) {
 		input_getc();
 	}
+	else if (fd == 1){
+		return -1;
+	}
 	return file_read(file, buffer, size);
 }
 
-// void _seek (struct intr_frame *f);
+int _write(struct intr_frame *f) {
+	int fd = f->R.rdi;
+	struct thread* curr = thread_current();
+	struct file *file = curr->fdt[fd];
+	void *buffer = f->R.rsi;
+	if(!check_address(buffer)){
+		return 0;
+	}
+	unsigned size = f->R.rdx;
 
-// unsigned _tell (struct intr_frame *f);
+	if(fd == 1){
+		putbuf(buffer,size);
+	}
+	int result = 0;
+	if(file!=NULL){
+		result = file_write(file, buffer, size);
+	}
+	// printf("file %s buffer %p size %d\n", file, buffer, size);
+	return result;
+}
+void _seek (struct intr_frame *f){
+	int fd = f->R.rdi;
+	struct thread* curr = thread_current();
+	struct file *file = curr->fdt[fd];
+	unsigned position = f->R.rsi;
+	file_seek (file,position);
+}
+
+unsigned _tell (struct intr_frame *f){
+	struct file *file = f->R.rdi;
+	return file_tell (file);
+}
 
 void _close (struct intr_frame *f) {
 	int fd = f->R.rdi;
