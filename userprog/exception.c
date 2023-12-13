@@ -6,6 +6,8 @@
 #include "threads/thread.h"
 #include "intrinsic.h"
 
+#include "userprog/syscall.h"
+
 /* Number of page faults processed. */
 static long long page_fault_cnt;
 
@@ -158,7 +160,8 @@ page_fault (struct intr_frame *f) {
 
 	//page fault 수정
 	f->rip = f->R.rax;
-	f->R.rax = -1;		
-	kill (f);
+	f->R.rax = -1;
+	exit_with_status(-1);	
+	// kill (f);
 }
 

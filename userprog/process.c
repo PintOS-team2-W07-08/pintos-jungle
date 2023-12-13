@@ -52,9 +52,11 @@ process_create_initd (const char *file_name) {
 	if (fn_copy == NULL)
 		return TID_ERROR;
 	strlcpy (fn_copy, file_name, PGSIZE);
-	// printf("create_init %s\n",file_name);
 	/* Create a new thread to execute FILE_NAME. */
-	tid = thread_create (file_name, PRI_DEFAULT, initd, fn_copy);
+	char *f_name, *save_ptr;
+	f_name = strtok_r (file_name, " ", &save_ptr);
+
+	tid = thread_create (f_name, PRI_DEFAULT, initd, fn_copy);
 	if (tid == TID_ERROR)
 		palloc_free_page (fn_copy);
 	return tid;
@@ -68,6 +70,7 @@ initd (void *f_name) {
 #endif
 
 	process_init ();
+	// printf("initd f_name %s",f_name);
 
 	if (process_exec (f_name) < 0)
 		PANIC("Fail to launch initd\n");
@@ -251,7 +254,8 @@ process_exec (void *f_name) {
 	}
 
 	struct thread* current = thread_current();
-	
+	// printf("current name: %s\n",current->name);
+
 	//hex_dump
 	// printf("execute _if\n");
 	// intr_dump_frame(&_if);
@@ -320,8 +324,9 @@ process_exit (void) {
 	sema_up(sema);
 	/*
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	printf("%s: exit(%d)\n",name,status); //printf?
-
+	// printf("%s: exit(%d)\n",name,status); //printf?
+	// file_allow_write(&curr->ex_file); //안해도 클로스하면 활성화
+	file_close(curr->ex_file);
 	process_cleanup ();
 
 }
@@ -467,10 +472,14 @@ load (const char *file_name, struct intr_frame *if_) {
 	file_name = argv[0];
 	/* Open executable file. */
 	file = filesys_open (file_name);
+	file_deny_write(file);
+	t->ex_file = file;
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
 		goto done;
 	}
+	// strlcpy (t->name, file_name, sizeof t->name);
+
 
 	/* Read and verify executable header. */
 	if (file_read (file, &ehdr, sizeof ehdr) != sizeof ehdr
@@ -558,7 +567,7 @@ load (const char *file_name, struct intr_frame *if_) {
 
 done:
 	/* We arrive here whether the load is successful or not. */
-	file_close (file);
+	// file_close (file);//닫으면 deny활성화
 	return success;
 }
 

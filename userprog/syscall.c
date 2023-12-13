@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <syscall-nr.h>
 #include <user/syscall.h>  /* include lib/usr/syscall.h for pid_t */
+#include <console.h>
+
+#include "devices/input.h"
 
 #include "threads/interrupt.h"
 #include "threads/thread.h"
@@ -21,7 +24,6 @@
 void syscall_entry (void);
 void syscall_handler (struct intr_frame *);
 
-static void thread_terminate(void);
 static void validate_pointer(void * ptr);
 static void validate_pointer2(void * ptr);
 struct file *validate_fd(int fd);
@@ -104,22 +106,26 @@ syscall_handler (struct intr_frame *f) {
 	return; //변경
 }
 
-static void thread_terminate(void){
-	thread_current()->exit_status = -1;
-	thread_exit();
+void exit_with_status(int status){
+	const char *thread_name = thread_current()->name;
+	printf("%s: exit(%d)\n",thread_name,status); //printf?
+	thread_current() -> exit_status = status; //이거 맞나?
+	thread_exit ();
 }
+
 /* 
 	첫번째 방법 - 유효성 확인 후 포인터 해제
 		thread/mmu.c , vaddr.h 함수 참고
 */
 static void validate_pointer(void *ptr){
 	struct thread *curr = thread_current();
-	uintptr_t ptr_addr = &ptr;
-
-	if(!is_user_vaddr(ptr)
-		|| pml4_get_page(curr->pml4, ptr)==NULL){
-		thread_terminate();
+	if(!ptr
+		|| !is_user_vaddr(ptr)
+		|| !pml4_get_page(curr->pml4, ptr)
+	){
+		exit_with_status(-1);
 	}
+	return;
 }
 
 /*
@@ -127,21 +133,19 @@ static void validate_pointer(void *ptr){
 */
 static void validate_pointer2(void * ptr){
 	struct thread *curr = thread_current();
-	uintptr_t ptr_addr = &ptr;
 
 	bool success = false;
 	if(!is_user_vaddr(ptr)
 		|| get_user(ptr)==-1 //여기서 검사하지 않고 역참조시 검사하는게 맞는 걸수도
 	){
-		thread_terminate();
+		exit_with_status(-1);		
 	}
 }
 
 struct file *validate_fd(int fd){
 
 	if(!check_fd_validate(fd)){
-		// printf("not valid fd %d\n",fd);
-		thread_terminate();
+		exit_with_status(-1);		
 	}
 	
 	struct thread *curr = thread_current();
@@ -170,14 +174,7 @@ _halt (struct intr_frame *f UNUSED) {
 static void
 _exit_ (struct intr_frame *f) {
 	int status = f->R.rdi;
-
-	// const char *thread_name = thread_current()->name;
-	// const char *file_name =
-	//실행중인 게 하나인지
-	// file_allow_write(filename);
-
-	thread_current() -> exit_status = status; //이거 맞나?
-	thread_exit ();
+	exit_with_status(status);
 }
 
 static void
@@ -204,8 +201,6 @@ _exec (struct intr_frame *f) {
 		return TID_ERROR;
 	}
 	strlcpy (fn_copy, file_name, PGSIZE);
-	// const char *filename;
-	//file_deny_write(filename);
 
 	int exit_status = process_exec(fn_copy);
 
@@ -227,7 +222,6 @@ static void
 _create (struct intr_frame *f) {
 	const char *file = (char *)f->R.rdi;
 	unsigned initial_size = f->R.rsi;
-	// printf("create file: %s\n", file);
 	bool success = false;
 
 	validate_pointer(file);
@@ -278,11 +272,18 @@ _read (struct intr_frame *f) {  //0에서 읽기
 	void *buffer = (void *)f->R.rsi;
 	unsigned size = f->R.rdx;
 
-	validate_pointer(buffer);
+	int r_bytes = -1;
+	if(fd==STDIN_FILENO){
+		input_init();
+		input_getc();
+	}else if(fd==STDOUT_FILENO){
+		r_bytes = -1;
+	}else{
+		validate_pointer(buffer);
+		struct file* file = validate_fd(fd);
+		r_bytes = (int)file_read(file, buffer, size);
+	}
 
-	struct file* file = validate_fd(fd);
-
-	int r_bytes = (int)file_read(file, buffer, size);
 	f->R.rax = r_bytes;
 }
 
@@ -296,15 +297,17 @@ _write (struct intr_frame *f) { //1,2에 출력하기
 
 	struct file* file;
 	int w_bytes = -1;
-	if(fd==1){
-		printf("%s",(char *)buffer);
+	if(fd==STDOUT_FILENO){
+		putbuf(buffer, size);
 		w_bytes = size;
+	}else if(fd==STDIN_FILENO){
+		// pritf("STDOUT\n");
+		w_bytes = -1;
 	}else{
 		if((file = validate_fd(fd))!=NULL){  //TODO: deny_write 체크
 			w_bytes = (int)file_write(file, buffer, size);
 		}
 	}
-	// 
 	f->R.rax = w_bytes;
 }
 
@@ -335,7 +338,7 @@ _close (struct intr_frame *f) { //암시적으로 닫기 (실제로 호출 필�
 	const struct thread *curr = thread_current();
 
 	if(!delete_fd(curr,fd)){
-		thread_terminate();
+		exit_with_status(-1);
 	}
 }
 

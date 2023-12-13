@@ -276,8 +276,6 @@ thread_create (const char *name, int priority,
 	//상속
 	struct thread* parent_thread = thread_current();
 	if(is_thread(parent_thread)){
-		t->parent_elem = parent_thread->elem;
-		// printf("parent_elem: %s\n", parent_thread->name);
 		list_push_back(&parent_thread->child_list,&t->child_elem);
 		sema_init(&t->wait_sema, 0);
 

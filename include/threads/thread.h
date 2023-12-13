@@ -94,7 +94,6 @@ typedef int tid_t;
 struct thread {
 	/* Owned by thread.c. */
 	tid_t tid;                          /* Thread identifier. */
-	struct list_elem parent_elem;
 	enum thread_status status;          /* Thread state. */
 	char name[16];                      /* Name (for debugging purposes). */
 	int base_priority;					/* Base priority for recall */
@@ -108,6 +107,7 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	struct file *ex_file;
 	struct file *files[MAX_DESCRIPTER];
 	int last_fd;
 
