@@ -276,9 +276,10 @@ thread_create (const char *name, int priority,
 	//상속
 	struct thread* parent_thread = thread_current();
 	if(is_thread(parent_thread)){
-		list_push_back(&parent_thread->child_list,&t->child_elem);
-		sema_init(&t->wait_sema, 0);
-
+		t->exit_sema_elem = palloc_get_page (0);
+		sema_init(&t->exit_sema_elem->semaphore, 0);
+		t->exit_sema_elem->tid=tid;
+		list_push_back(&parent_thread->child_sema_list,&t->exit_sema_elem->elem);
 	}
 
 	/* Add to run queue. */
@@ -808,7 +809,7 @@ init_thread (struct thread *t, const char *name, int priority) {
 	//stdin, stdio, stderr
 	t->last_fd = MIN_DESCRIPTER;
 
-	list_init(&t->child_list);
+	list_init(&t->child_sema_list);
 	list_init(&t->fork_sema);
 	
 	t->magic = THREAD_MAGIC;
@@ -1157,7 +1158,7 @@ bool delete_fd(struct thread *curr, int fd){
 	if(!check_fd_validate(fd)){
 		return false;
 	}
-
+	file_close(curr->files[fd]);
 	curr->files[fd] = NULL;
 	if(curr->last_fd != -1 && curr->last_fd > fd){
 		curr->last_fd = fd;

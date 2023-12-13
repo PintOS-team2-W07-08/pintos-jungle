@@ -21,6 +21,13 @@ enum thread_status {
 	THREAD_DYING        /* About to be destroyed. */
 };
 
+struct exit_sema_elem {
+	int tid;
+	int exit_status;
+	struct list_elem elem;              /* List element. */
+	struct semaphore semaphore;         /* This semaphore. */
+};
+
 /* Thread identifier type.
    You can redefine this to whatever type you like. */
 typedef int tid_t;
@@ -113,10 +120,9 @@ struct thread {
 	int last_fd;
 
 	//for wait
-	struct list child_list; 
-	struct list_elem child_elem;
+	struct list child_sema_list;
+	struct exit_sema_elem *exit_sema_elem;
 
-	struct semaphore wait_sema;
 	struct semaphore fork_sema;
 
 	int exit_status;

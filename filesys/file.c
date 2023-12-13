@@ -22,7 +22,6 @@ file_open (struct inode *inode) {
 		file->inode = inode;
 		file->pos = 0;
 		file->deny_write = false;
-		// lock_init(&file->lock);
 		return file;
 	} else {
 		inode_close (inode);
@@ -74,8 +73,10 @@ file_get_inode (struct file *file) {
  * Advances FILE's position by the number of bytes read. */
 off_t
 file_read (struct file *file, void *buffer, off_t size) {
+	// lock_acquire(&file->lock);
 	off_t bytes_read = inode_read_at (file->inode, buffer, size, file->pos);
 	file->pos += bytes_read;
+	// lock_release(&file->lock);
 	return bytes_read;
 }
 
@@ -86,7 +87,10 @@ file_read (struct file *file, void *buffer, off_t size) {
  * The file's current position is unaffected. */
 off_t
 file_read_at (struct file *file, void *buffer, off_t size, off_t file_ofs) {
-	return inode_read_at (file->inode, buffer, size, file_ofs);
+	// lock_acquire(&file->lock);
+	off_t off_t = inode_read_at (file->inode, buffer, size, file_ofs);
+	// lock_release(&file->lock);
+	return off_t;
 }
 
 /* Writes SIZE bytes from BUFFER into FILE,

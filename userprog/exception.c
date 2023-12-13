@@ -151,6 +151,9 @@ page_fault (struct intr_frame *f) {
 	/* Count page faults. */
 	page_fault_cnt++;
 
+	f->rip = f->R.rax;
+	f->R.rax = -1;
+	exit_with_status(-1);	
 	/* If the fault is true fault, show info and exit. */
 	printf ("Page fault at %p: %s error %s page in %s context.\n",
 			fault_addr,
@@ -159,9 +162,7 @@ page_fault (struct intr_frame *f) {
 			user ? "user" : "kernel");
 
 	//page fault 수정
-	f->rip = f->R.rax;
-	f->R.rax = -1;
-	exit_with_status(-1);	
+	
 	// kill (f);
 }
 
