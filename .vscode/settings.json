@@ -6,6 +6,7 @@
         "stdio.h": "c",
         "thread.h": "c",
         "file.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "*.inc": "c"
     }
 }
