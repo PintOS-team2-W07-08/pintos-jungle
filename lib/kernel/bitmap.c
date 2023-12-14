@@ -282,7 +282,9 @@ bitmap_scan (const struct bitmap *b, size_t start, size_t cnt, bool value) {
 	return BITMAP_ERROR;
 }
 
-/* Finds the first group of CNT consecutive bits in B at or after
+/* 
+   Flase가 자유, True가 할당 된 블럭.
+   Finds the first group of CNT consecutive bits in B at or after
    START that are all set to VALUE, flips them all to !VALUE,
    and returns the index of the first bit in the group.
    If there is no such group, returns BITMAP_ERROR.
@@ -291,12 +293,13 @@ bitmap_scan (const struct bitmap *b, size_t start, size_t cnt, bool value) {
    setting them. */
 size_t
 bitmap_scan_and_flip (struct bitmap *b, size_t start, size_t cnt, bool value) {
+	//start 뒷쪽에 count만큼의 연속 false 있는지 확인
 	size_t idx = bitmap_scan (b, start, cnt, value);
-	if (idx != BITMAP_ERROR)
-		bitmap_set_multiple (b, idx, cnt, !value);
+	if (idx != BITMAP_ERROR) //없으면 맨 뒷쪽 비트 반환
+		bitmap_set_multiple (b, idx, cnt, !value); //할당으로 바꿈
 	return idx;
 }
-
+
 /* File input and output. */
 
 #ifdef FILESYS

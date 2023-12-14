@@ -17,6 +17,7 @@
 #include "intrinsic.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+
 #endif
 
 /* Random value for struct thread's `magic' member.
@@ -272,6 +273,14 @@ thread_create (const char *name, int priority,
 	t->tf.cs = SEL_KCSEG;
 	t->tf.eflags = FLAG_IF;
 
+	//상속
+	struct thread* parent_thread = thread_current();
+	if(is_thread(parent_thread)){
+		list_push_back(&parent_thread->child_list,&t->child_elem);
+		sema_init(&t->wait_sema, 0);
+
+	}
+
 	/* Add to run queue. */
 	thread_unblock (t);
 	// if(t!=thread_current() && (name,"idle")==0 && t->base_priority > thread_current()->base_priority){
@@ -373,7 +382,6 @@ thread_tid (void) {
 void
 thread_exit (void) {
 	ASSERT (!intr_context ());
-
 #ifdef USERPROG
 	process_exit ();
 #endif
@@ -412,8 +420,9 @@ thread_yield (void) {
 
 void
 thread_preemtion(void){
+	
 	if(!thread_mlfqs){
-		if(!list_empty(&ready_list)){
+		if(!list_empty(&ready_list) && !intr_context()){
 			struct thread *curr = thread_current();
 			list_sort(&ready_list, bigger_priority, NULL);
 			struct list_elem *front_elem = list_front(&ready_list);
@@ -778,14 +787,14 @@ init_thread (struct thread *t, const char *name, int priority) {
 	strlcpy (t->name, name, sizeof t->name);
 	t->tf.rsp = (uint64_t) t + PGSIZE - sizeof (void *);
 
+	struct thread *parent_thread = running_thread();
 	if(!thread_mlfqs) {
 		t->base_priority = priority;
 		t->priority = priority;
 		list_init(&(t->donor_list));
 	}
 	else {
-		struct thread *parent_thread = running_thread();
-		if(is_thread(parent_thread)){
+		if(is_thread(parent_thread)){ //이거 부모 아님
 			t->niceness = parent_thread->niceness;
 			t->recent_cpu = parent_thread->recent_cpu;
 		}else{
@@ -796,6 +805,12 @@ init_thread (struct thread *t, const char *name, int priority) {
 		t->priority = PRI_MAX + 1;
 	} 
 
+	//stdin, stdio, stderr
+	t->last_fd = MIN_DESCRIPTER;
+
+	list_init(&t->child_list);
+	list_init(&t->fork_sema);
+	
 	t->magic = THREAD_MAGIC;
 	return;
 }
@@ -917,7 +932,9 @@ bool bigger_priority_donor(const struct list_elem *a,
 	}
 }
 
-/* Use iretq to launch the thread */
+/* 
+intr_frame 을 레지스터로 move
+Use iretq to launch the thread */
 void
 do_iret (struct intr_frame *tf) {
 	__asm __volatile(
@@ -945,7 +962,10 @@ do_iret (struct intr_frame *tf) {
 			: : "g" ((uint64_t) tf) : "memory");
 }
 
-/* Switching the thread by activating the new thread's page
+/* 
+   running thread의 레지스터를 curr tf(interrupt_frame)에 저장하고,
+   새 tf 로드를 위해 do_iret() 실행
+   Switching the thread by activating the new thread's page
    tables, and, if the previous thread is dying, destroying it.
 
    At this function's invocation, we just switched from thread
@@ -1086,7 +1106,6 @@ schedule (void) {
 		thread_launch (next);
 	}
 }
-
 /* Returns a tid to use for a new thread. */
 static tid_t
 allocate_tid (void) {
@@ -1098,6 +1117,52 @@ allocate_tid (void) {
 	lock_release (&tid_lock);
 
 	return tid;
+}
+
+int next_fd(struct thread *curr){
+	return curr->last_fd; //files중 비어있는 가장 빠른 fd를 가리킴
+	//full인 경우 -1
+}
+
+int apply_fd(struct thread *curr, int fd, struct file *file){
+	
+	// printf("apply fd %d\n",fd);
+	curr->files[fd] = file;
+
+	//last_fd 갱신
+	int next_fd;
+	for(next_fd = fd; next_fd < MAX_DESCRIPTER; next_fd++){
+		if(curr->files[next_fd]==NULL) {
+			curr->last_fd = next_fd;
+			break;
+		}
+	}
+
+	//full
+	if(next_fd==MAX_DESCRIPTER){
+		curr->last_fd = -1;
+	}
+
+	return fd;
+}
+
+bool check_fd_validate(int fd){
+	if(MIN_DESCRIPTER > fd || MAX_DESCRIPTER < fd){ //범위 확인
+		return false;
+	}
+	return true;
+}
+
+bool delete_fd(struct thread *curr, int fd){
+	if(!check_fd_validate(fd)){
+		return false;
+	}
+
+	curr->files[fd] = NULL;
+	if(curr->last_fd != -1 && curr->last_fd > fd){
+		curr->last_fd = fd;
+	}
+	return true;
 }
 
 void list_thread_dump(struct list *list){

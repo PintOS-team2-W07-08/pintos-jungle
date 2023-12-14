@@ -6,6 +6,9 @@
 #include <stdint.h>
 #include "threads/interrupt.h"
 #include "threads/fixed_point.h"
+#include "filesys/file.h"
+#include "threads/synch.h"
+
 #ifdef VM
 #include "vm/vm.h"
 #endif
@@ -28,6 +31,9 @@ typedef int tid_t;
 #define PRI_DEFAULT 31                  /* Default priority. */
 #define PRI_MAX 63                      /* Highest priority. */
 
+/*file descriptor*/
+#define MIN_DESCRIPTER 3
+#define MAX_DESCRIPTER 128
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -101,9 +107,22 @@ struct thread {
 	/* Shared between thread.c and synch.c. */
 	struct list_elem elem;              /* List element. */
 
+	struct file *ex_file;
+	struct file *files[MAX_DESCRIPTER];
+	int last_fd;
+
+	//for wait
+	struct list child_list; 
+	struct list_elem child_elem;
+
+	struct semaphore wait_sema;
+	struct semaphore fork_sema;
+
+	int exit_status;
+
 #ifdef USERPROG
 	/* Owned by userprog/process.c. */
-	uint64_t *pml4;                     /* Page map level 4 */
+	uint64_t *pml4;                     /* Page map level 4 mmu가 반환하는 thread의 page 주소*/
 #endif
 #ifdef VM
 	/* Table for whole virtual memory owned by thread. */
@@ -162,7 +181,7 @@ void thread_set_priority (int);
 int thread_get_superficial_priority(struct thread*);
 int thread_get_base_priority(struct thread *);
 void thread_donate_priority(struct thread *, struct thread *);
-void thread_recall_priority(struct lock *lock);
+void thread_recall_priority(struct lock *);
 
 void thread_calculate_priority(struct thread *thrd, void *aux);
 void thread_calculate_recent_cpu(struct thread *thrd, void *aux);
@@ -179,6 +198,12 @@ void thread_set_load_avg (void);
 void do_iret (struct intr_frame *tf);
 
 // static void thread_launch (struct thread *th);
+
+/*for file descriptor */
+int next_fd(struct thread *curr);
+int apply_fd(struct thread *curr, int fd, struct file *file);
+bool check_fd_validate(int fd);
+bool delete_fd(struct thread *curr, int fd);
 
 void list_thread_dump(struct list *);
 

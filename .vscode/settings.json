@@ -1,0 +1,12 @@
+{
+    "files.associations": {
+        "syscall.h": "c",
+        "intrinsic.h": "c",
+        "syscall-nr.h": "c",
+        "stdio.h": "c",
+        "thread.h": "c",
+        "file.h": "c",
+        "string.h": "c",
+        "*.inc": "c"
+    }
+}
