@@ -105,6 +105,36 @@ process_fork (const char *name, struct intr_frame *if_ ) {
 	// }
 	// printf("sema waiting %d\n", tid);
 	sema_down(&curr->fork_sema);
+
+	struct list *sema_list = &curr->child_sema_list;
+	struct list_elem *elem = list_begin(sema_list);
+	struct list_elem *next_elem;
+	struct semaphore *sema;
+	struct exit_sema_elem *child;
+	while(elem!=list_tail(sema_list)){
+		next_elem = list_next(elem);
+		child = list_entry(elem, struct exit_sema_elem, elem);
+		// printf("this child sema tid: %d\n",child->tid);
+		if(child->tid==tid){
+			// printf("find child sema tid: %d\n",child->tid);
+			sema = &child->semaphore;
+			// printf("sema down waiting tid : %d\n",child->tid);			
+			if(!list_empty(&sema->waiters)){
+				printf("wait 중복 호출");
+				break;
+			}
+			// printf("sema down, %d\n",child_tid);
+			int status = child->exit_status;
+			if(status==TID_ERROR){
+				list_remove(elem);
+				palloc_free_page(child);
+				return status;
+			}
+			// printf("child exit_status %d\n",status);
+		}
+		elem = next_elem;
+	}
+
 	// printf("fork complete %d\n", tid);//왜 print안될까
 	
 	return tid;
@@ -123,16 +153,19 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 
 	/* 1. TODO: If the parent_page is kernel page, then return immediately.*/
 	if(is_kern_pte(pte)) return true; //왜?
+	// va = pg_round_down(va);
 
 	/* 2. Resolve VA from the parent's page map level 4. */
 	if((parent_page = pml4_get_page (parent->pml4, va))==NULL){
+		// printf("pml4 get page null\n");
 		return false;
 	};
 
 	/* 3. TODO: Allocate new PAL_USER page for the child and set result to
 	 *    TODO: NEWPAGE. */
 	if((newpage = palloc_get_page (PAL_USER | PAL_ZERO))==NULL){ // setupstack 따라하기
-		palloc_free_page(newpage);
+		// palloc_free_page(newpage);
+		// printf("palloc get page null\n");
 		return false;
 	} 
 
@@ -146,6 +179,7 @@ duplicate_pte (uint64_t *pte, void *va, void *aux) {
 	 *    permission. */
 	if (!pml4_set_page (current->pml4, va, newpage, writable)) {
 		/* 6. TODO: if fail to insert page, do error handling. */
+		// printf("pml4 set page fail\n");
 		palloc_free_page(newpage);
 		return false;
 	}
@@ -179,8 +213,10 @@ __do_fork (void *aux) {
 
 	/* 2. Duplicate PT */
 	current->pml4 = pml4_create();
-	if (current->pml4 == NULL)
+	if (current->pml4 == NULL){
+		printf("current pml4 null\n");
 		goto error;
+	}
 
 	process_activate (current);
 #ifdef VM
@@ -188,8 +224,11 @@ __do_fork (void *aux) {
 	if (!supplemental_page_table_copy (&current->spt, &parent->spt))
 		goto error;
 #else
-	if (!pml4_for_each (parent->pml4, duplicate_pte, parent))
+	if (!pml4_for_each (parent->pml4, duplicate_pte, parent)){
+		printf("pml4 duplicate error\n");
 		goto error;
+	}
+		
 #endif
 
 	for(int i=MIN_DESCRIPTER; i<MAX_DESCRIPTER; i++){
@@ -200,7 +239,7 @@ __do_fork (void *aux) {
 	}
 	current->last_fd = parent->last_fd;
 
-	sema_up(fork_sema);
+	
 
 	// printf("sema up %d %s  parent: %d\n", current->tid, current->name, parent->tid);
 
@@ -213,9 +252,11 @@ __do_fork (void *aux) {
 	process_init ();
 
 	/* Finally, switch to the newly created process. */
-	if (succ)
+	if (succ){
+		sema_up(fork_sema);
 		if_.R.rax = 0;
 		do_iret (&if_);
+	}
 error:
 	sema_up(fork_sema);
 	exit_with_status(-1);
@@ -256,7 +297,7 @@ process_exec (void *f_name) {
 		return -1;
 	}
 
-	struct thread* current = thread_current();
+	// struct thread* current = thread_current();
 	// printf("current name: %s\n",current->name);
 
 	//hex_dump
@@ -333,6 +374,7 @@ process_exit (void) {
 	
 	sema_up(sema);
 
+	//child palloc free
 	struct list *sema_list = &curr->child_sema_list;
 	struct list_elem *elem = list_begin(sema_list);
 	struct list_elem *next_elem;
@@ -340,19 +382,27 @@ process_exit (void) {
 	while(elem!=list_tail(sema_list)){
 		next_elem = list_next(elem);
 		child = list_entry(elem, struct exit_sema_elem, elem);
-		// list_remove(elem);
+		list_remove(elem);
 		palloc_free_page(child);
 		// printf("this child sema tid: %d\n",child->tid);
 		elem = next_elem;
 	}
 
+	//file close
 	for(int i=MIN_DESCRIPTER; i<MAX_DESCRIPTER; i++){
 		struct file *file = curr->files[i];
 		if(file!=NULL){ //nullc체크 왜 해야하는지?
+			lock_acquire(filesys_lock);
 			file_close(file);
+			file=NULL;
+			lock_release(filesys_lock);
 		}
 	}
+
+	//excuting file close
+	lock_acquire(filesys_lock);
 	file_close(curr->ex_file);
+	lock_release(filesys_lock);
 
 	process_cleanup ();
 
@@ -499,13 +549,17 @@ load (const char *file_name, struct intr_frame *if_) {
 	file_name = argv[0];
 	/* Open executable file. */
 	// printf("file name %s\n",file_name);
+	lock_acquire(filesys_lock);
 	file = filesys_open (file_name);
-	
+
 	if (file == NULL) {
 		printf ("load: %s: open failed\n", file_name);
+		lock_release(filesys_lock);
 		exit_with_status(-1);
 		goto done;
 	}
+	lock_release(filesys_lock);
+
 	t->ex_file = file;
 	file_deny_write(file);
 
@@ -594,8 +648,10 @@ load (const char *file_name, struct intr_frame *if_) {
 	success = true;
 
 done:
+	if(!success){
+		file_close (file);
+	}
 	/* We arrive here whether the load is successful or not. */
-	// file_close (file);//닫으면 deny활성화
 	return success;
 }
 

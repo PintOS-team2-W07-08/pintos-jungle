@@ -17,6 +17,7 @@
 #include "intrinsic.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 
 #endif
 
@@ -515,16 +516,16 @@ thread_donate_priority(struct thread* toThread, struct thread* donor){
 	if(thread_mlfqs) return; //TIL
 	// printf("우선권 기부하기 -> %d\n", prioirty);
 	ASSERT(&(toThread->donor_list)!=NULL);
-	struct thread* nowThrd = toThread;
+	struct thread* now_thread = toThread;
 	toThread->priority = donor->priority;	
 	list_push_back(&(toThread->donor_list), &donor->donor_elem);
 	
-	while(nowThrd->waitonlock){
-		struct lock *lock = nowThrd->waitonlock;
+	while(now_thread->waitonlock){
+		struct lock *lock = now_thread->waitonlock;
 		struct thread *holder = lock->holder;
 		// list_push_back(&(holder->donor_list), &nowThrd->donor_elem);
-		holder->priority = nowThrd->priority; //무조건 높은애만 들어옴
-		nowThrd = holder;
+		holder->priority = now_thread->priority; //무조건 높은애만 들어옴
+		now_thread = holder;
 	}
 	thread_yield();
 }
@@ -1126,7 +1127,7 @@ int next_fd(struct thread *curr){
 }
 
 int apply_fd(struct thread *curr, int fd, struct file *file){
-	
+	ASSERT(fd>=MIN_DESCRIPTER && fd<MAX_DESCRIPTER);
 	// printf("apply fd %d\n",fd);
 	curr->files[fd] = file;
 
@@ -1158,9 +1159,14 @@ bool delete_fd(struct thread *curr, int fd){
 	if(!check_fd_validate(fd)){
 		return false;
 	}
+	lock_acquire(filesys_lock);
 	file_close(curr->files[fd]);
 	curr->files[fd] = NULL;
-	if(curr->last_fd != -1 && curr->last_fd > fd){
+	lock_release(filesys_lock);
+
+	if(curr->last_fd==-1){
+		curr->last_fd = fd;
+	}else if(curr->last_fd > fd){
 		curr->last_fd = fd;
 	}
 	return true;

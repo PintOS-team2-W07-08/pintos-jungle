@@ -197,16 +197,21 @@ _exec (struct intr_frame *f) {
 	char *fn_copy;
 	fn_copy = palloc_get_page (0);
 	if (fn_copy == NULL){
+		palloc_free_page(fn_copy);
 		return TID_ERROR;
 	}
 	strlcpy (fn_copy, file_name, PGSIZE);
 
 	int exit_status = process_exec(fn_copy);
 
-	//정상의 경우 반환 안함
-	thread_current() -> exit_status = exit_status;
-	f->R.rax = exit_status;
-	thread_exit ();
+	if(exit_status<0){
+		//정상의 경우 반환 안함
+		palloc_free_page(fn_copy);
+		thread_current() -> exit_status = exit_status;
+		f->R.rax = exit_status;
+		thread_exit ();
+	}
+	
 }
 
 static void
@@ -247,10 +252,14 @@ _open (struct intr_frame *f) {
 	validate_pointer(filename);
 
 	int fd = -1;
+	lock_acquire(filesys_lock);
 	if((file = filesys_open(filename)) != NULL){//reopen 구현
 		fd = next_fd(curr);
-		fd = apply_fd(curr,fd,file);
+		if(fd!=-1){
+			fd = apply_fd(curr,fd,file);
+		}
 	}
+	lock_release(filesys_lock);
 	
 	f->R.rax = fd;
 }
@@ -270,7 +279,7 @@ _read (struct intr_frame *f) {  //0에서 읽기
 	int fd = f->R.rdi;
 	void *buffer = (void *)f->R.rsi;
 	unsigned size = f->R.rdx;
-
+	ASSERT(fd!=-1 && fd <MAX_DESCRIPTER);
 	int r_bytes = -1;
 	if(fd==STDIN_FILENO){
 		input_init();
@@ -280,7 +289,9 @@ _read (struct intr_frame *f) {  //0에서 읽기
 	}else{
 		validate_pointer(buffer);
 		struct file* file = validate_fd(fd);
+		lock_acquire(filesys_lock);
 		r_bytes = (int)file_read(file, buffer, size);
+		lock_release(filesys_lock);
 	}
 
 	f->R.rax = r_bytes;
@@ -303,8 +314,10 @@ _write (struct intr_frame *f) { //1,2에 출력하기
 		// pritf("STDOUT\n");
 		w_bytes = -1;
 	}else{
-		if((file = validate_fd(fd))!=NULL){  //TODO: deny_write 체크
+		if((file = validate_fd(fd))!=NULL){
+			lock_acquire(filesys_lock);
 			w_bytes = (int)file_write(file, buffer, size);
+			lock_release(filesys_lock);
 		}
 	}
 	f->R.rax = w_bytes;

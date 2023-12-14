@@ -110,6 +110,9 @@ main (void) {
 	/* Initialize file system. */
 	disk_init ();
 	filesys_init (format_filesys);
+
+	filesys_lock = palloc_get_page(0);
+	lock_init(filesys_lock);
 #endif
 
 #ifdef VM
@@ -343,7 +346,7 @@ power_off (void) {
 #endif
 
 	print_stats ();
-
+	palloc_free_page(filesys_lock);
 	printf ("Powering off...\n");
 	outw (0x604, 0x2000);               /* Poweroff command for qemu */
 	for (;;);
