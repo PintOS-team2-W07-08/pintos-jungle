@@ -100,7 +100,7 @@ syscall_handler (struct intr_frame *f) {
 		case SYS_DUP2 : 	_dup2 (f); 		break;  
 		default :
 			printf("없는 시스템 콜입니다.\n");
-			thread_exit (); //변경
+			exit_with_status(-1);
 			break;
 	} 
 	return; //변경
@@ -252,14 +252,14 @@ _open (struct intr_frame *f) {
 	validate_pointer(filename);
 
 	int fd = -1;
-	lock_acquire(filesys_lock);
+	// lock_acquire(filesys_lock);
 	if((file = filesys_open(filename)) != NULL){//reopen 구현
 		fd = next_fd(curr);
 		if(fd!=-1){
 			fd = apply_fd(curr,fd,file);
 		}
 	}
-	lock_release(filesys_lock);
+	// lock_release(filesys_lock);
 	
 	f->R.rax = fd;
 }
@@ -289,9 +289,9 @@ _read (struct intr_frame *f) {  //0에서 읽기
 	}else{
 		validate_pointer(buffer);
 		struct file* file = validate_fd(fd);
-		lock_acquire(filesys_lock);
+		// lock_acquire(filesys_lock);
 		r_bytes = (int)file_read(file, buffer, size);
-		lock_release(filesys_lock);
+		// lock_release(filesys_lock);
 	}
 
 	f->R.rax = r_bytes;
@@ -315,9 +315,9 @@ _write (struct intr_frame *f) { //1,2에 출력하기
 		w_bytes = -1;
 	}else{
 		if((file = validate_fd(fd))!=NULL){
-			lock_acquire(filesys_lock);
+			// lock_acquire(filesys_lock);
 			w_bytes = (int)file_write(file, buffer, size);
-			lock_release(filesys_lock);
+			// lock_release(filesys_lock);
 		}
 	}
 	f->R.rax = w_bytes;

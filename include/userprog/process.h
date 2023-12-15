@@ -18,6 +18,7 @@ struct semaphore_elem {
 // 	struct semaphore semaphore;         /* This semaphore. */
 // };
 
+static struct list_elem *find_sema_child(tid_t tid);
 tid_t process_create_initd (const char *file_name);
 tid_t process_fork (const char *name, struct intr_frame *if_);
 int process_exec (void *f_name);

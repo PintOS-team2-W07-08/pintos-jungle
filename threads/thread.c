@@ -277,9 +277,7 @@ thread_create (const char *name, int priority,
 	//상속
 	struct thread* parent_thread = thread_current();
 	if(is_thread(parent_thread)){
-		t->exit_sema_elem = palloc_get_page (0);
-		sema_init(&t->exit_sema_elem->semaphore, 0);
-		t->exit_sema_elem->tid=tid;
+		exit_sema_init(t,tid);
 		list_push_back(&parent_thread->child_sema_list,&t->exit_sema_elem->elem);
 	}
 
@@ -291,6 +289,14 @@ thread_create (const char *name, int priority,
 	thread_preemtion();
 
 	return tid;
+}
+
+void exit_sema_init(struct thread *t, tid_t tid){
+	t->exit_sema_elem = palloc_get_page (0);
+	sema_init(&t->exit_sema_elem->semaphore, 0);
+	t->exit_sema_elem->tid=tid;
+	t->exit_sema_elem->exit_status=-200;
+	t->exit_sema_elem->isdead=false;
 }
 
 /* 
@@ -809,9 +815,8 @@ init_thread (struct thread *t, const char *name, int priority) {
 
 	//stdin, stdio, stderr
 	t->last_fd = MIN_DESCRIPTER;
-
 	list_init(&t->child_sema_list);
-	list_init(&t->fork_sema);
+	t->exit_status=-200;
 	
 	t->magic = THREAD_MAGIC;
 	return;
@@ -1159,10 +1164,10 @@ bool delete_fd(struct thread *curr, int fd){
 	if(!check_fd_validate(fd)){
 		return false;
 	}
-	lock_acquire(filesys_lock);
+	// lock_acquire(filesys_lock);
 	file_close(curr->files[fd]);
 	curr->files[fd] = NULL;
-	lock_release(filesys_lock);
+	// lock_release(filesys_lock);
 
 	if(curr->last_fd==-1){
 		curr->last_fd = fd;

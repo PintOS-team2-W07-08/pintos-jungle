@@ -24,6 +24,7 @@ enum thread_status {
 struct exit_sema_elem {
 	int tid;
 	int exit_status;
+	bool isdead;
 	struct list_elem elem;              /* List element. */
 	struct semaphore semaphore;         /* This semaphore. */
 };
@@ -40,7 +41,7 @@ typedef int tid_t;
 
 /*file descriptor*/
 #define MIN_DESCRIPTER 3
-#define MAX_DESCRIPTER 128
+#define MAX_DESCRIPTER 129
 /* A kernel thread or user process.
  *
  * Each thread structure is stored in its own 4 kB page.  The
@@ -145,6 +146,8 @@ struct thread {
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
 extern bool thread_mlfqs;
+
+void exit_sema_init(struct thread *t,tid_t tid);
 
 void thread_init (void);
 void thread_start (void);

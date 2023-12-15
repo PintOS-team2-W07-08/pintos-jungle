@@ -92,52 +92,57 @@ process_fork (const char *name, struct intr_frame *if_ ) {
 	//current->tf 현재의 커널의 tf
 	
 	sema_init(&curr->fork_sema,0);
-	// printf("fork sema init %s\n", curr->name);
+	printf("fork sema init %s\n", curr->name);
 
 	struct aux_arg arg = {curr , if_};
 	// printf("----------parent dump before fork------------\n");
 	// intr_dump_frame(&curr->tf);
 	
-	tid_t tid = thread_create (name,
-			PRI_DEFAULT, __do_fork, &arg);
-	// if (tid == TID_ERROR){
-	// 	return tid;
-	// }
-	// printf("sema waiting %d\n", tid);
+	tid_t tid = thread_create (name, PRI_DEFAULT, __do_fork, &arg);
+
+	// printf("fork sema down waiting\n");			
 	sema_down(&curr->fork_sema);
+	// printf("fork sema down\n");
+
+	struct list_elem *elem = find_sema_child(tid);
+	if(elem==NULL){
+		ASSERT(false);
+		return TID_ERROR;
+	}
+
+	struct exit_sema_elem *child = list_entry(elem, struct exit_sema_elem, elem);
+	struct semaphore *sema = &child->semaphore;
+	if(!list_empty(&sema->waiters)){
+		printf("wait 중복 호출");
+		return TID_ERROR;
+	}
+	int status = child->exit_status;
+	if(status == TID_ERROR){
+		list_remove(elem);
+		palloc_free_page(child);
+		return TID_ERROR;
+	}
+
+	return tid;
+}
+
+static struct list_elem *find_sema_child(tid_t tid){
+	struct thread *curr = thread_current();
 
 	struct list *sema_list = &curr->child_sema_list;
 	struct list_elem *elem = list_begin(sema_list);
 	struct list_elem *next_elem;
-	struct semaphore *sema;
 	struct exit_sema_elem *child;
 	while(elem!=list_tail(sema_list)){
 		next_elem = list_next(elem);
 		child = list_entry(elem, struct exit_sema_elem, elem);
 		// printf("this child sema tid: %d\n",child->tid);
 		if(child->tid==tid){
-			// printf("find child sema tid: %d\n",child->tid);
-			sema = &child->semaphore;
-			// printf("sema down waiting tid : %d\n",child->tid);			
-			if(!list_empty(&sema->waiters)){
-				printf("wait 중복 호출");
-				break;
-			}
-			// printf("sema down, %d\n",child_tid);
-			int status = child->exit_status;
-			if(status==TID_ERROR){
-				list_remove(elem);
-				palloc_free_page(child);
-				return status;
-			}
-			// printf("child exit_status %d\n",status);
+			return elem;
 		}
 		elem = next_elem;
 	}
-
-	// printf("fork complete %d\n", tid);//왜 print안될까
-	
-	return tid;
+	return NULL;
 }
 
 #ifndef VM
@@ -239,8 +244,6 @@ __do_fork (void *aux) {
 	}
 	current->last_fd = parent->last_fd;
 
-	
-
 	// printf("sema up %d %s  parent: %d\n", current->tid, current->name, parent->tid);
 
 	/* TODO: Your code goes here.
@@ -250,6 +253,7 @@ __do_fork (void *aux) {
 	/* TODO: the resources of parent.*/
 	
 	process_init ();
+	// printf("forked t%d (%s)\n",current->tid, current->name);
 
 	/* Finally, switch to the newly created process. */
 	if (succ){
@@ -325,36 +329,33 @@ process_wait (tid_t child_tid) {
 	int status = -1;
 	// printf("-preparing '%s' status: %d\n",name,status); //printf?
 	// printf("%d waiting tid: %d\n", curr->tid, child_tid);
+	printf("waiting t%d (%s)\n", child_tid, name);
 	
-	//find child_tid elem
-	struct list *sema_list = &curr->child_sema_list;
-	struct list_elem *elem = list_begin(sema_list);
-	struct list_elem *next_elem;
-	struct semaphore *sema;
-	struct exit_sema_elem *child;
-	while(elem!=list_tail(sema_list)){
-		next_elem = list_next(elem);
-		child = list_entry(elem, struct exit_sema_elem, elem);
-		// printf("this child sema tid: %d\n",child->tid);
-		if(child->tid==child_tid){
-			// printf("find child sema tid: %d\n",child->tid);
-			sema = &child->semaphore;
-			// printf("sema down waiting tid : %d\n",child->tid);			
-			if(!list_empty(&sema->waiters)){
-				printf("wait 중복 호출");
-				break;
-			}
-			sema_down(sema);
-			// printf("sema down, %d\n",child_tid);
-			status = child->exit_status;
-			// printf("child exit_status %d\n",status);
-			list_remove(elem);
-			palloc_free_page(child);
-			return status;
-		}
-		elem = next_elem;
+	struct list_elem *elem = find_sema_child(child_tid);
+	if(elem==NULL){
+		ASSERT(false);
+		return -1;
 	}
 
+	struct exit_sema_elem *child = list_entry(elem, struct exit_sema_elem, elem);
+	struct semaphore *sema = &child->semaphore;
+
+	if(!list_empty(&sema->waiters)){
+		printf("wait 중복 호출");
+		ASSERT(false);
+		return -1;
+	}
+	if(child->exit_status==-1){
+		printf("exited process %d\n", child_tid);
+		return -1;
+	}
+	if(!child->isdead){
+		sema_down(sema);
+	}
+	status = child->exit_status;
+	list_remove(elem);
+	palloc_free_page(child);
+	printf("wait success t%d s%d (%s)\n", child_tid, status, name);
 	return status;
 }
 
@@ -364,17 +365,13 @@ process_exit (void) {
 	struct thread *curr = thread_current ();
 	char *name = curr->name;
 	int status = curr->exit_status;
+	int tid = curr->tid;
 
 	// printf("preparing %s: exit(%d)\n",name,status); //printf?
 	/*
 	 * TODO: We recommend you to implement process resource cleanup here. */
-	struct exit_sema_elem *sema_elem = curr->exit_sema_elem;
-	struct semaphore *sema = &sema_elem->semaphore;
-	sema_elem->exit_status=status;
-	
-	sema_up(sema);
-
 	//child palloc free
+	int cnt=0;
 	struct list *sema_list = &curr->child_sema_list;
 	struct list_elem *elem = list_begin(sema_list);
 	struct list_elem *next_elem;
@@ -386,24 +383,35 @@ process_exit (void) {
 		palloc_free_page(child);
 		// printf("this child sema tid: %d\n",child->tid);
 		elem = next_elem;
+		cnt++;
 	}
+	// printf("못 지운 process %d\n", cnt);
 
 	//file close
 	for(int i=MIN_DESCRIPTER; i<MAX_DESCRIPTER; i++){
 		struct file *file = curr->files[i];
 		if(file!=NULL){ //nullc체크 왜 해야하는지?
-			lock_acquire(filesys_lock);
+			// lock_acquire(filesys_lock);
 			file_close(file);
 			file=NULL;
-			lock_release(filesys_lock);
+			// lock_release(filesys_lock);
 		}
 	}
 
 	//excuting file close
-	lock_acquire(filesys_lock);
+	// lock_acquire(filesys_lock);
 	file_close(curr->ex_file);
-	lock_release(filesys_lock);
+	// lock_release(filesys_lock);
 
+	struct exit_sema_elem *sema_elem = curr->exit_sema_elem;
+	if(sema_elem==NULL){
+		ASSERT(false);
+	}
+	struct semaphore *sema = &sema_elem->semaphore;
+	sema_elem->exit_status=status;
+
+	// printf("exit t%d s%d(%s)\n", curr->tid, curr->status, curr->name);
+	sema_up(sema);
 	process_cleanup ();
 
 }
